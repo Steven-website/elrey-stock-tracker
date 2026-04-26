@@ -21,9 +21,9 @@ export function initSupabase() {
 
 export function getSupabase() { return sb; }
 
-// Devuelve el tienda_id del usuario actual, o null si es admin Master (ve todo)
+// Devuelve el tienda_id del usuario actual, o null si es admin/jefe_inventario (ven todo)
 function _tid() {
-  if (State.user?.rol === 'admin') return null;
+  if (State.user?.rol === 'admin' || State.user?.rol === 'jefe_inventario') return null;
   return State.user?.tienda_id || null;
 }
 
@@ -602,6 +602,118 @@ export const API = {
       .map(a => ({ ...a, stock_total: stock[a.id] || 0 }))
       .filter(a => a.stock_total < threshold)
       .sort((a, b) => a.stock_total - b.stock_total);
+  },
+
+  // -------------------- CONTEO DE INVENTARIO --------------------
+  async getTareaConteoActiva(tiendaId) {
+    const tid = tiendaId || _tid() || State.user?.tienda_id;
+    if (isDemoMode()) {
+      const tarea = MOCK.tareas_conteo.find(t =>
+        t.estado === 'activa' && t.tienda_id === tid &&
+        t.asignado_a === State.user?.id
+      );
+      if (!tarea) return null;
+      const articulos = MOCK.tarea_articulos
+        .filter(ta => ta.tarea_id === tarea.id)
+        .map(ta => MOCK.articulos.find(a => a.id === ta.articulo_id))
+        .filter(Boolean);
+      const creador = MOCK.usuarios.find(u => u.id === tarea.creado_por);
+      return { ...tarea, articulos, creador };
+    }
+    const { data: tareas } = await sb.from('tareas_conteo')
+      .select('*, usuarios!creado_por(nombre,username)')
+      .eq('tienda_id', tid).eq('estado', 'activa').eq('asignado_a', State.user.id).limit(1);
+    if (!tareas?.length) return null;
+    const tarea = tareas[0];
+    const { data: tas } = await sb.from('tarea_articulos')
+      .select('*, articulos(*)').eq('tarea_id', tarea.id);
+    return { ...tarea, articulos: (tas || []).map(r => r.articulos).filter(Boolean), creador: tarea.usuarios };
+  },
+
+  async getConteoRegistros(tareaId) {
+    if (isDemoMode()) {
+      return MOCK.conteo_registros
+        .filter(r => r.tarea_id === tareaId)
+        .map(r => ({
+          ...r,
+          caja:     MOCK.cajas.find(c => c.id === r.caja_id),
+          articulo: MOCK.articulos.find(a => a.id === r.articulo_id),
+          usuario:  MOCK.usuarios.find(u => u.id === r.usuario_id)
+        }));
+    }
+    const { data, error } = await sb.from('conteo_registros')
+      .select('*, cajas(codigo_caja), articulos(sku,descripcion), usuarios(nombre,username)')
+      .eq('tarea_id', tareaId);
+    if (error) throw error;
+    return (data || []).map(r => ({ ...r, caja: r.cajas, articulo: r.articulos, usuario: r.usuarios }));
+  },
+
+  async registrarConteo({ tarea_id, caja_id, articulo_id, cantidad_fisica }) {
+    const uid = State.user?.id;
+    if (isDemoMode()) {
+      const existing = MOCK.conteo_registros.find(r =>
+        r.tarea_id === tarea_id && r.caja_id === caja_id && r.articulo_id === articulo_id
+      );
+      if (existing) {
+        existing.cantidad_fisica = cantidad_fisica;
+        existing.contado_at = new Date().toISOString();
+        return existing;
+      }
+      const reg = {
+        id: nextId(MOCK.conteo_registros),
+        tarea_id, caja_id, articulo_id, cantidad_fisica,
+        usuario_id: uid, contado_at: new Date().toISOString()
+      };
+      MOCK.conteo_registros.push(reg);
+      return reg;
+    }
+    const { data, error } = await sb.from('conteo_registros').upsert({
+      tarea_id, caja_id, articulo_id, cantidad_fisica, usuario_id: uid,
+      contado_at: new Date().toISOString()
+    }, { onConflict: 'tarea_id,caja_id,articulo_id' }).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async completarTareaConteo(tareaId) {
+    if (isDemoMode()) {
+      const tarea = MOCK.tareas_conteo.find(t => t.id === tareaId);
+      if (tarea) { tarea.estado = 'pendiente_revision'; tarea.enviado_at = new Date().toISOString(); }
+      return tarea;
+    }
+    const { data, error } = await sb.from('tareas_conteo')
+      .update({ estado: 'pendiente_revision', enviado_at: new Date().toISOString() })
+      .eq('id', tareaId).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async createTareaConteo({ tienda_id, nombre, articulo_ids, asignado_a }) {
+    const uid = State.user?.id;
+    if (isDemoMode()) {
+      const tarea = {
+        id: nextId(MOCK.tareas_conteo),
+        nombre, tienda_id, creado_por: uid, asignado_a,
+        estado: 'activa', creado_at: new Date().toISOString()
+      };
+      MOCK.tareas_conteo.push(tarea);
+      let nextTaId = nextId(MOCK.tarea_articulos);
+      articulo_ids.forEach(artId => {
+        MOCK.tarea_articulos.push({ id: nextTaId++, tarea_id: tarea.id, articulo_id: artId });
+      });
+      return tarea;
+    }
+    const { data: tarea, error } = await sb.from('tareas_conteo').insert({
+      nombre, tienda_id, creado_por: uid, asignado_a, estado: 'activa'
+    }).select().single();
+    if (error) throw error;
+    if (articulo_ids.length) {
+      const { error: e2 } = await sb.from('tarea_articulos').insert(
+        articulo_ids.map(artId => ({ tarea_id: tarea.id, articulo_id: artId }))
+      );
+      if (e2) throw e2;
+    }
+    return tarea;
   },
 
   async updateArticulo(id, changes) {

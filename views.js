@@ -5,7 +5,7 @@
 import { State, Storage } from './state.js';
 import { API } from './api.js';
 import { ICON, $, escapeHtml, fmtDate, toast, feedback } from './utils.js';
-import { login, logout, isAdmin, isAdminTienda, canExport } from './auth.js';
+import { login, logout, isAdmin, isAdminTienda, isSupervisor, canExport } from './auth.js';
 import { getPendingCount } from './queue.js';
 import { startScanner, stopScanner, isActive as scannerActive } from './scanner.js';
 import { render, resetInactivityTimer } from './main.js';
@@ -53,7 +53,8 @@ export function renderLogin() {
         MROJAS / super123 &nbsp; <span style="color:var(--muted-2);">(supervisor)</span><br>
         JMARTINEZ / oper123 &nbsp; <span style="color:var(--muted-2);">(operario)</span><br>
         CCONTADOR / cont123 &nbsp; <span style="color:var(--muted-2);">(contador)</span><br>
-        AUDITOR / audit123 &nbsp; <span style="color:var(--muted-2);">(auditor)</span>
+        AUDITOR / audit123 &nbsp; <span style="color:var(--muted-2);">(auditor)</span><br>
+        JINVENTARIO / jinv123 &nbsp; <span style="color:var(--muted-2);">(jefe inventario)</span>
       </div>
     ` : ''}
 
@@ -149,17 +150,19 @@ export function renderShell() {
     State.view = 'mas';
   }
 
-  const canPrint = ['operario', 'contador'].includes(State.user?.rol);
+  const canPrint   = ['operario', 'contador'].includes(State.user?.rol);
+  const isContador = State.user?.rol === 'contador';
 
   const main = $(`<main></main>`);
-  if (!adminOnly && State.view === 'scan')             main.appendChild(renderScanView());
-  else if (!adminOnly && State.view === 'mover-lote')  main.appendChild(renderMoverLoteView());
-  else if (!adminOnly && State.view === 'buscar')      main.appendChild(renderBuscarView());
-  else if (!adminOnly && State.view === 'cajas')       main.appendChild(renderCajasView());
-  else if (!adminOnly && State.view === 'perfil')      main.appendChild(renderPerfilView());
-  else if (!adminOnly && State.view === 'imprimir' && canPrint) main.appendChild(renderImprimirView());
-  else if (State.view === 'mov')                       main.appendChild(renderMovView());
-  else if (State.view === 'mas')                       main.appendChild(renderMasView());
+  if (!adminOnly && State.view === 'scan')                           main.appendChild(renderScanView());
+  else if (!adminOnly && State.view === 'mover-lote')               main.appendChild(renderMoverLoteView());
+  else if (!adminOnly && State.view === 'buscar')                   main.appendChild(renderBuscarView());
+  else if (!adminOnly && State.view === 'cajas')                    main.appendChild(renderCajasView());
+  else if (!adminOnly && State.view === 'perfil')                   main.appendChild(renderPerfilView());
+  else if (!adminOnly && State.view === 'imprimir' && canPrint)     main.appendChild(renderImprimirView());
+  else if (!adminOnly && State.view === 'conteo'   && isContador)   main.appendChild(renderConteoView());
+  else if (State.view === 'mov')                                     main.appendChild(renderMovView());
+  else if (State.view === 'mas')                                     main.appendChild(renderMasView());
   wrap.appendChild(main);
 
   const pending = getPendingCount();
@@ -177,6 +180,7 @@ export function renderShell() {
         <button data-v="buscar" class="${State.view==='buscar'   ?'active':''}">${ICON.search}<span>Buscar</span></button>
         <button data-v="cajas"  class="${State.view==='cajas'    ?'active':''}">${ICON.box}<span>Cajas</span></button>
         <button data-v="mov"    class="${State.view==='mov'      ?'active':''}">${ICON.list}<span>Mov.</span>${pending > 0 ? `<span class="nav-badge">${pending}</span>` : ''}</button>
+        ${isContador ? `<button data-v="conteo" class="${State.view==='conteo'?'active':''}">${ICON.clipboard}<span>Conteo</span></button>` : ''}
         ${canPrint ? `<button data-v="imprimir" class="${State.view==='imprimir'?'active':''}">${ICON.qr}<span>Imprimir</span></button>` : ''}
         <button data-v="perfil" class="${State.view==='perfil'   ?'active':''}">${ICON.user}<span>Perfil</span></button>
         <button class="nav-logout" id="nav-logout-btn">${ICON.logout}<span>Cerrar sesión</span></button>
@@ -2029,8 +2033,8 @@ function renderAdminTiendaMasView() {
 function rolLabel(rol) {
   const map = {
     admin: 'Master', admin_tienda: 'Admi Tienda',
-    supervisor: 'Supervisor', operario: 'Operario',
-    contador: 'Contador', auditor: 'Auditor'
+    supervisor: 'Supervisor', jefe_inventario: 'Jefe Inventario',
+    operario: 'Operario', contador: 'Contador', auditor: 'Auditor'
   };
   return map[rol] || rol;
 }
@@ -2039,6 +2043,7 @@ function rolColor(rol) {
   return rol === 'admin' ? 'warn'
        : rol === 'admin_tienda' ? 'accent'
        : rol === 'supervisor' ? 'info'
+       : rol === 'jefe_inventario' ? 'accent'
        : rol === 'auditor' ? 'danger'
        : rol === 'contador' ? 'success'
        : 'muted';
@@ -2064,6 +2069,224 @@ function adminUserItem(u) {
     render();
   };
   return item;
+}
+
+// =====================================================================
+// MÁS — supervisor / contador / operario / auditor
+// =====================================================================
+function renderUserMasView() {
+  const u    = State.user;
+  const wrap = $(`<div></div>`);
+
+  wrap.innerHTML = `
+    <div class="admin-header">
+      <div>
+        <div class="admin-header-title">${ICON.user} ${escapeHtml(u.nombre || u.username)}</div>
+        <div class="admin-header-sub">${escapeHtml(u.username)} · ${rolLabel(u.rol)}</div>
+      </div>
+      <span class="pill pill-${rolColor(u.rol)}">${rolLabel(u.rol)}</span>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Opciones de sesión</div>
+      <button class="perfil-action-btn" id="btn-user-pwd">
+        ${ICON.lock}
+        <div>
+          <div style="font-weight:600; font-size:13px;">Cambiar contraseña</div>
+          <div style="font-size:11px; color:var(--muted);">Actualizar tu contraseña de acceso</div>
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-left:auto;flex-shrink:0;color:var(--muted-2);"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+      <button class="btn btn-danger btn-block" id="mas-logout" style="margin-top:12px;">
+        ${ICON.logout} Cerrar sesión
+      </button>
+    </div>
+
+    ${isSupervisor() && u.rol === 'supervisor' ? `
+      <div class="section" style="padding-top:0;">
+        <div class="section-title">Tareas de conteo</div>
+        <div id="super-conteo-list" class="stack">
+          <div class="empty"><div class="loader"></div></div>
+        </div>
+      </div>
+    ` : ''}
+  `;
+
+  wrap.querySelector('#btn-user-pwd').onclick = () => { State.modal = 'cambiar-password'; render(); };
+  wrap.querySelector('#mas-logout').onclick   = () => {
+    if (!confirm('¿Cerrar sesión?')) return; logout(); render();
+  };
+
+  if (isSupervisor() && u.rol === 'supervisor') {
+    API.listTiendas().then(tiendas => {
+      const t = tiendas.find(x => x.id === u.tienda_id);
+      const tid = u.tienda_id;
+      const tareas = (window._MOCK?.MOCK || {}).tareas_conteo
+        ?.filter(t => t.tienda_id === tid) || [];
+      const list = wrap.querySelector('#super-conteo-list');
+      if (!list) return;
+      if (!tareas.length) {
+        list.innerHTML = `<div class="empty" style="padding:16px 0;"><p>Sin tareas de conteo en tu tienda</p></div>`;
+        return;
+      }
+      list.innerHTML = '';
+      tareas.forEach(task => {
+        const estadoColor = task.estado === 'activa' ? 'success'
+                          : task.estado === 'pendiente_revision' ? 'warn' : 'muted';
+        list.appendChild($(`
+          <div class="list-item">
+            <div class="icon-box">${ICON.clipboard}</div>
+            <div class="grow">
+              <div style="font-weight:500; font-size:13px;">${escapeHtml(task.nombre)}</div>
+              <div class="meta"><span>${fmtDate(task.creado_at)}</span></div>
+            </div>
+            <span class="pill pill-${estadoColor}">${task.estado === 'pendiente_revision' ? 'Rev. pendiente' : task.estado}</span>
+          </div>
+        `));
+      });
+    }).catch(() => {});
+  }
+
+  return wrap;
+}
+
+// =====================================================================
+// CONTEO — vista del contador con tarea activa
+// =====================================================================
+function renderConteoView() {
+  const wrap = $(`<div></div>`);
+  const tiendaId = State.user?.tienda_id;
+
+  wrap.innerHTML = `
+    <div class="section" style="padding-bottom:0;">
+      <div class="section-title">${ICON.clipboard} Tarea de conteo</div>
+    </div>
+    <div id="conteo-body" class="section" style="padding-top:8px;">
+      <div class="empty"><div class="loader"></div></div>
+    </div>
+  `;
+
+  Promise.all([
+    API.getTareaConteoActiva(tiendaId),
+    API.listCajas(false)
+  ]).then(([tarea, cajas]) => {
+    const body = wrap.querySelector('#conteo-body');
+    if (!tarea) {
+      body.innerHTML = `
+        <div class="empty" style="padding:32px 16px;">
+          ${ICON.clipboard}
+          <h3 style="margin-top:8px;">Sin tarea asignada</h3>
+          <p>El supervisor te asignará una tarea de conteo cuando sea necesario</p>
+        </div>
+      `;
+      return;
+    }
+
+    API.getConteoRegistros(tarea.id).then(registros => {
+      const regMap = {};
+      registros.forEach(r => { regMap[`${r.caja_id}_${r.articulo_id}`] = r; });
+
+      body.innerHTML = `
+        <div class="conteo-tarea-header">
+          <div class="conteo-tarea-nombre">${escapeHtml(tarea.nombre)}</div>
+          <div class="conteo-tarea-meta">
+            Asignada por ${escapeHtml(tarea.creador?.nombre || '—')}
+          </div>
+        </div>
+        <div id="conteo-articulos"></div>
+        <div style="padding:16px 0 24px;">
+          <button class="btn btn-primary btn-block" id="btn-enviar-conteo">
+            ${ICON.check} Enviar al supervisor para revisión
+          </button>
+        </div>
+      `;
+
+      const artsEl = body.querySelector('#conteo-articulos');
+
+      tarea.articulos.forEach(art => {
+        const cajasArt = cajas.filter(c =>
+          c.contenido?.some(i => i.articulo_id === art.id)
+        );
+
+        const artSection = $(`
+          <div class="conteo-art-section">
+            <div class="conteo-art-header">
+              <span class="mono" style="font-size:11px; color:var(--accent);">${escapeHtml(art.sku)}</span>
+              <span style="font-weight:600; font-size:13px;">${escapeHtml(art.descripcion)}</span>
+            </div>
+            <div class="conteo-cajas-list" id="cajaslist-${art.id}"></div>
+            <button class="btn btn-sm conteo-crear-btn" data-art-id="${art.id}" data-art-desc="${escapeHtml(art.descripcion)}">
+              ${ICON.add} Crear caja
+            </button>
+          </div>
+        `);
+
+        const cajasListEl = artSection.querySelector(`#cajaslist-${art.id}`);
+
+        if (!cajasArt.length) {
+          cajasListEl.innerHTML = `
+            <div style="font-size:12px; color:var(--muted); padding:8px 0;">
+              Sin cajas registradas para este artículo
+            </div>
+          `;
+        } else {
+          cajasArt.forEach(caja => {
+            const key = `${caja.id}_${art.id}`;
+            const reg = regMap[key];
+            const counted = !!reg;
+            const row = $(`
+              <div class="conteo-caja-row ${counted ? 'conteo-counted' : ''}">
+                <div class="conteo-caja-info">
+                  <div class="mono" style="font-size:11px; color:var(--accent);">${escapeHtml(caja.codigo_caja.slice(-12))}</div>
+                  <div class="conteo-caja-loc">${escapeHtml(caja.posicion?.ubicacion || 'Sin ubicar')}${caja.posicion?.descripcion ? ' · ' + escapeHtml(caja.posicion.descripcion) : ''}</div>
+                </div>
+                ${counted
+                  ? `<span class="pill pill-success" style="font-size:11px;">${ICON.check} Contado</span>`
+                  : `<button class="btn btn-sm btn-primary conteo-contar-btn" data-caja-id="${caja.id}" data-art-id="${art.id}">Contar</button>`
+                }
+              </div>
+            `);
+            row.querySelector('.conteo-contar-btn')?.addEventListener('click', () => {
+              State.cache.conteoTarget = { tarea_id: tarea.id, caja, art };
+              State.modal = 'conteoBox';
+              render();
+            });
+            cajasListEl.appendChild(row);
+          });
+        }
+
+        artSection.querySelector('.conteo-crear-btn').addEventListener('click', () => {
+          State.cache.conteoNuevaCaja = {
+            tarea_id: tarea.id, art, tienda_id: tiendaId,
+            codigo: null, posicion_id: null
+          };
+          State.modal = 'conteoCrearCaja';
+          render();
+        });
+
+        artsEl.appendChild(artSection);
+      });
+
+      body.querySelector('#btn-enviar-conteo').onclick = async () => {
+        if (!confirm('¿Enviar el conteo al supervisor para revisión?')) return;
+        try {
+          await API.completarTareaConteo(tarea.id);
+          toast('Conteo enviado al supervisor ✓', 'success');
+          render();
+        } catch (e) {
+          toast('Error: ' + e.message, 'error');
+        }
+      };
+    }).catch(e => {
+      wrap.querySelector('#conteo-body').innerHTML =
+        `<div class="empty"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
+    });
+  }).catch(e => {
+    wrap.querySelector('#conteo-body').innerHTML =
+      `<div class="empty"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
+  });
+
+  return wrap;
 }
 
 // =====================================================================

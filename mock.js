@@ -1,13 +1,15 @@
 // =====================================================================
 // mock.js — datos demo cuando no hay Supabase configurado
 // Credenciales demo:
-//   SSEGURA   / admin123    (admin)
-//   MROJAS    / super123    (supervisor · Alajuela)
-//   JMARTINEZ / oper123     (operario  · Alajuela)
-//   CCONTADOR / cont123     (contador  · Alajuela)
-//   AUDITOR   / audit123    (auditor   · Alajuela)
-//   HGOMEZ    / super456    (supervisor· Heredia)
-//   KLOPEZ    / oper456     (operario  · Heredia)
+//   SSEGURA      / admin123    (admin)
+//   MROJAS       / super123    (supervisor · Alajuela)
+//   JMARTINEZ    / oper123     (operario   · Alajuela)
+//   CCONTADOR    / cont123     (contador   · Alajuela)
+//   AUDITOR      / audit123    (auditor    · Alajuela)
+//   HGOMEZ       / super456    (supervisor · Heredia)
+//   KLOPEZ       / oper456     (operario   · Heredia)
+//   LADMIN       / tienda123   (admin_tienda · Alajuela)
+//   JINVENTARIO  / jinv123     (jefe_inventario · todas las tiendas)
 // =====================================================================
 
 import { hashPassword } from './utils.js';
@@ -26,7 +28,8 @@ export const MOCK = {
     { id: 5, username: 'AUDITOR',   nombre: 'Ana Auditora',     email: 'aauditora@almaceneselrey.com',  rol: 'auditor',    tienda_id: 1, activo: true,  password_hash: '' },
     { id: 6, username: 'HGOMEZ',    nombre: 'Hugo Gómez',       email: 'hgomez@almaceneselrey.com',     rol: 'supervisor', tienda_id: 2, activo: true,  password_hash: '' },
     { id: 7, username: 'KLOPEZ',    nombre: 'Karina López',     email: 'klopez@almaceneselrey.com',     rol: 'operario',   tienda_id: 2, activo: true,  password_hash: '' },
-    { id: 8, username: 'LADMIN',    nombre: 'Laura Admin',      email: 'ladmin@almaceneselrey.com',     rol: 'admin_tienda', tienda_id: 1, activo: true, password_hash: '' }
+    { id: 8, username: 'LADMIN',      nombre: 'Laura Admin',      email: 'ladmin@almaceneselrey.com',      rol: 'admin_tienda',    tienda_id: 1,    activo: true, password_hash: '' },
+    { id: 9, username: 'JINVENTARIO', nombre: 'Jorge Inventario', email: 'jinventario@almaceneselrey.com', rol: 'jefe_inventario', tienda_id: null, activo: true, password_hash: '' }
   ],
 
   posiciones: [
@@ -133,6 +136,24 @@ export const MOCK = {
     }
   ],
 
+  // ── Conteo de inventario ─────────────────────────────────────────────
+  tareas_conteo: [
+    {
+      id: 1, nombre: 'Conteo Familia Iluminación',
+      tienda_id: 1, creado_por: 2, asignado_a: 4,
+      estado: 'activa', creado_at: '2026-04-26T08:00:00Z'
+    }
+  ],
+
+  tarea_articulos: [
+    { id: 1, tarea_id: 1, articulo_id: 1 },
+    { id: 2, tarea_id: 1, articulo_id: 2 },
+    { id: 3, tarea_id: 1, articulo_id: 3 },
+    { id: 4, tarea_id: 1, articulo_id: 4 }
+  ],
+
+  conteo_registros: [],
+
   movimientos: [
     { id: 12, tipo: 'crear_caja',  caja_id: 5, articulo_id: null, cantidad: null, usuario_id: 6, motivo: 'Recepción proveedor H01',  creado_at: '2026-04-18T14:30:00Z' },
     { id: 11, tipo: 'reducir',     caja_id: 4, articulo_id: 4,   cantidad: 12,   usuario_id: 7, motivo: 'Venta',                    creado_at: '2026-04-25T09:15:00Z' },
@@ -149,17 +170,16 @@ export const MOCK = {
   ]
 };
 
-// Credenciales demo:
-//   LADMIN    / tienda123   (admin_tienda · Alajuela)
 const _DEFAULT_PASSWORDS = {
-  SSEGURA:   'admin123',
-  MROJAS:    'super123',
-  JMARTINEZ: 'oper123',
-  CCONTADOR: 'cont123',
-  AUDITOR:   'audit123',
-  HGOMEZ:    'super456',
-  KLOPEZ:    'oper456',
-  LADMIN:    'tienda123'
+  SSEGURA:     'admin123',
+  MROJAS:      'super123',
+  JMARTINEZ:   'oper123',
+  CCONTADOR:   'cont123',
+  AUDITOR:     'audit123',
+  HGOMEZ:      'super456',
+  KLOPEZ:      'oper456',
+  LADMIN:      'tienda123',
+  JINVENTARIO: 'jinv123'
 };
 
 export async function initMockPasswords() {

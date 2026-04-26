@@ -919,6 +919,7 @@ export function renderCreateUserModal() {
       <option value="contador">Contador — conteos de inventario</option>
       <option value="auditor">Auditor — auditorías y verificación</option>
       <option value="supervisor">Supervisor — todo excepto admin</option>
+      <option value="jefe_inventario">Jefe Inventario — supervisión de conteos, todas las tiendas</option>
       <option value="admin_tienda">Admi Tienda — gestiona usuarios de su tienda</option>
       <option value="admin">Master — acceso total</option>
     </select>
@@ -1038,12 +1039,13 @@ export function renderEditUserModal() {
 
     <label class="label">Rol</label>
     <select class="select" id="e-rol" ${isSelf ? 'disabled' : ''}>
-      <option value="operario"    ${u.rol==='operario'?'selected':''}>Operario</option>
-      <option value="contador"    ${u.rol==='contador'?'selected':''}>Contador</option>
-      <option value="auditor"     ${u.rol==='auditor'?'selected':''}>Auditor</option>
-      <option value="supervisor"  ${u.rol==='supervisor'?'selected':''}>Supervisor</option>
-      <option value="admin_tienda" ${u.rol==='admin_tienda'?'selected':''}>Admi Tienda</option>
-      <option value="admin"       ${u.rol==='admin'?'selected':''}>Master</option>
+      <option value="operario"        ${u.rol==='operario'?'selected':''}>Operario</option>
+      <option value="contador"        ${u.rol==='contador'?'selected':''}>Contador</option>
+      <option value="auditor"         ${u.rol==='auditor'?'selected':''}>Auditor</option>
+      <option value="supervisor"      ${u.rol==='supervisor'?'selected':''}>Supervisor</option>
+      <option value="jefe_inventario" ${u.rol==='jefe_inventario'?'selected':''}>Jefe Inventario</option>
+      <option value="admin_tienda"    ${u.rol==='admin_tienda'?'selected':''}>Admi Tienda</option>
+      <option value="admin"           ${u.rol==='admin'?'selected':''}>Master</option>
     </select>
     ${isSelf ? '<div style="font-size:11px; color:var(--muted); margin-top:4px;">No podés cambiar tu propio rol</div>' : ''}
 
@@ -1610,6 +1612,191 @@ export function renderAuditModal() {
     closeModal();
   };
   modal.querySelector('#audit-close').onclick = () => closeModal();
+
+  return modal;
+}
+
+// =====================================================================
+// CONTEO: registrar conteo de caja existente
+// =====================================================================
+export function renderConteoBoxModal() {
+  const target = State.cache.conteoTarget;
+  if (!target) { closeModal(); return $(`<div></div>`); }
+  const { tarea_id, caja, art } = target;
+
+  const bodyHtml = `
+    <div class="box-header" style="margin-bottom:16px;">
+      <div class="box-code" style="font-size:13px;">${escapeHtml(caja.codigo_caja)}</div>
+      <div class="box-loc">
+        ${ICON.pin}
+        <span>${escapeHtml(caja.posicion?.ubicacion || 'Sin ubicar')}${caja.posicion?.descripcion ? ' · ' + escapeHtml(caja.posicion.descripcion) : ''}</span>
+      </div>
+    </div>
+
+    <div style="background:var(--surface-2); border:1px solid var(--border); padding:12px 14px; margin-bottom:16px;">
+      <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:4px;">Artículo a contar</div>
+      <div style="font-weight:600; font-size:13px;">${escapeHtml(art.descripcion)}</div>
+      <div style="font-size:11px; color:var(--accent); font-family:var(--font-mono);">${escapeHtml(art.sku)}</div>
+    </div>
+
+    <div class="banner banner-info" style="border:1px solid; margin-bottom:16px; font-size:12px; padding:10px 12px;">
+      ${ICON.info}
+      <span>Contá físicamente las unidades de este artículo en esta caja. <strong>No se muestra el sistema</strong> para evitar sesgo.</span>
+    </div>
+
+    <label class="label">Cantidad física contada</label>
+    <div style="display:flex; align-items:center; gap:12px; margin-top:8px;">
+      <button class="btn btn-sm" id="cnt-minus" style="width:44px; height:44px; font-size:20px; padding:0;">−</button>
+      <input type="number" class="input mono" id="cnt-qty" min="0" value="0"
+        style="flex:1; font-size:24px; font-weight:700; text-align:center; padding:10px;" />
+      <button class="btn btn-sm" id="cnt-plus" style="width:44px; height:44px; font-size:20px; padding:0;">+</button>
+    </div>
+  `;
+
+  const footerHtml = `
+    <button class="btn grow" id="cnt-cancel">Cancelar</button>
+    <button class="btn btn-primary grow" id="cnt-ok">${ICON.check} Registrar conteo</button>
+  `;
+
+  const modal = modalShell('Registrar conteo', bodyHtml, footerHtml);
+
+  const qtyEl = modal.querySelector('#cnt-qty');
+  modal.querySelector('#cnt-minus').onclick = () => { const v = parseInt(qtyEl.value)||0; if (v > 0) qtyEl.value = v - 1; };
+  modal.querySelector('#cnt-plus').onclick  = () => { qtyEl.value = (parseInt(qtyEl.value)||0) + 1; };
+
+  modal.querySelector('#cnt-cancel').onclick = () => closeModal();
+
+  modal.querySelector('#cnt-ok').onclick = async () => {
+    const qty = parseInt(qtyEl.value);
+    if (isNaN(qty) || qty < 0) { toast('Ingresá una cantidad válida', 'error'); return; }
+    const btn = modal.querySelector('#cnt-ok');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loader"></span>';
+    try {
+      await API.registrarConteo({
+        tarea_id, caja_id: caja.id, articulo_id: art.id, cantidad_fisica: qty
+      });
+      feedback('ok');
+      toast(`Conteo registrado: ${qty} u. ✓`, 'success');
+      State.cache.conteoTarget = null;
+      closeModal();
+    } catch (e) {
+      btn.disabled = false;
+      btn.innerHTML = `${ICON.check} Registrar conteo`;
+      toast('Error: ' + e.message, 'error');
+    }
+  };
+
+  return modal;
+}
+
+// =====================================================================
+// CONTEO: crear caja nueva durante conteo
+// =====================================================================
+export function renderConteoCrearCajaModal() {
+  const nc = State.cache.conteoNuevaCaja;
+  if (!nc) { closeModal(); return $(`<div></div>`); }
+
+  if (!nc.codigo) {
+    API.listTiendas().then(ts => {
+      const t = ts.find(x => x.id === nc.tienda_id);
+      nc.codigo = generateBoxCode(t?.codigo || 'A01');
+      render();
+    });
+    return modalShell('Crear caja en conteo', '<div class="empty"><div class="loader"></div></div>');
+  }
+
+  const bodyHtml = `
+    <div style="background:var(--surface-2); border:1px solid var(--border); padding:12px 14px; margin-bottom:16px;">
+      <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:4px;">Artículo</div>
+      <div style="font-weight:600; font-size:13px;">${escapeHtml(nc.art.descripcion)}</div>
+      <div style="font-size:11px; color:var(--accent); font-family:var(--font-mono);">${escapeHtml(nc.art.sku)}</div>
+    </div>
+
+    <label class="label">Código de la caja</label>
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:16px;">
+      <div class="box-code grow" id="cc-codigo" style="font-size:12px;">${escapeHtml(nc.codigo)}</div>
+      <button class="btn btn-sm btn-ghost" id="cc-regen" title="Nuevo código">${ICON.refresh}</button>
+    </div>
+
+    <label class="label">Ubicación donde se encuentra</label>
+    <select class="select" id="cc-pos" style="margin-bottom:16px;">
+      <option value="">— Selecciona la ubicación —</option>
+    </select>
+
+    <label class="label">Cantidad física contada</label>
+    <div style="display:flex; align-items:center; gap:12px; margin-top:8px;">
+      <button class="btn btn-sm" id="cc-minus" style="width:44px; height:44px; font-size:20px; padding:0;">−</button>
+      <input type="number" class="input mono" id="cc-qty" min="1" value="1"
+        style="flex:1; font-size:24px; font-weight:700; text-align:center; padding:10px;" />
+      <button class="btn btn-sm" id="cc-plus" style="width:44px; height:44px; font-size:20px; padding:0;">+</button>
+    </div>
+  `;
+
+  const footerHtml = `
+    <button class="btn grow" id="cc-cancel">Cancelar</button>
+    <button class="btn btn-primary grow" id="cc-ok">${ICON.add} Crear y registrar</button>
+  `;
+
+  const modal = modalShell('Crear caja en conteo', bodyHtml, footerHtml);
+
+  API.listPosiciones().then(positions => {
+    const sel = modal.querySelector('#cc-pos');
+    positions.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = `${p.ubicacion} · ${p.descripcion}`;
+      if (nc.posicion_id === p.id) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  });
+
+  modal.querySelector('#cc-regen').onclick = () => {
+    API.listTiendas().then(ts => {
+      const t = ts.find(x => x.id === nc.tienda_id);
+      nc.codigo = generateBoxCode(t?.codigo || 'A01');
+      modal.querySelector('#cc-codigo').textContent = nc.codigo;
+    });
+  };
+
+  const qtyEl = modal.querySelector('#cc-qty');
+  modal.querySelector('#cc-minus').onclick = () => { const v = parseInt(qtyEl.value)||1; if (v > 1) qtyEl.value = v - 1; };
+  modal.querySelector('#cc-plus').onclick  = () => { qtyEl.value = (parseInt(qtyEl.value)||0) + 1; };
+
+  modal.querySelector('#cc-cancel').onclick = () => closeModal();
+
+  modal.querySelector('#cc-ok').onclick = async () => {
+    const posId = parseInt(modal.querySelector('#cc-pos').value);
+    const qty   = parseInt(qtyEl.value);
+    if (!posId)        { toast('Seleccioná una ubicación', 'error'); return; }
+    if (!qty || qty < 1) { toast('Ingresá una cantidad válida', 'error'); return; }
+    const btn = modal.querySelector('#cc-ok');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loader"></span>';
+    try {
+      const caja = await API.createCaja({
+        codigo_caja: nc.codigo,
+        tipo_caja:   'reutilizable',
+        posicion_id: posId,
+        items:       [{ articulo_id: nc.art.id, cantidad: qty }],
+        motivo:      'Creación en conteo de inventario'
+      });
+      await API.registrarConteo({
+        tarea_id:       nc.tarea_id,
+        caja_id:        caja.id,
+        articulo_id:    nc.art.id,
+        cantidad_fisica: qty
+      });
+      feedback('ok');
+      toast(`Caja creada y conteo registrado ✓`, 'success');
+      State.cache.conteoNuevaCaja = null;
+      closeModal();
+    } catch (e) {
+      btn.disabled = false;
+      btn.innerHTML = `${ICON.add} Crear y registrar`;
+      toast('Error: ' + e.message, 'error');
+    }
+  };
 
   return modal;
 }

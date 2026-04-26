@@ -93,9 +93,10 @@ export function logout() {
 // Helpers de rol
 export function isAdmin()             { return State.user?.rol === 'admin'; }
 export function isAdminTienda()       { return State.user?.rol === 'admin_tienda'; }
+export function isJefeInventario()    { return ['admin', 'jefe_inventario'].includes(State.user?.rol); }
 export function canManageStoreUsers() { return ['admin', 'admin_tienda'].includes(State.user?.rol); }
-export function isSupervisor()  { return ['admin', 'admin_tienda', 'supervisor'].includes(State.user?.rol); }
-export function isContador()    { return ['admin', 'admin_tienda', 'supervisor', 'contador'].includes(State.user?.rol); }
+export function isSupervisor()  { return ['admin', 'admin_tienda', 'supervisor', 'jefe_inventario'].includes(State.user?.rol); }
+export function isContador()    { return ['admin', 'admin_tienda', 'supervisor', 'jefe_inventario', 'contador'].includes(State.user?.rol); }
 export function isAuditor()     { return ['admin', 'auditor'].includes(State.user?.rol); }
 export function canExport()     { return !['operario', 'contador'].includes(State.user?.rol); }
 
