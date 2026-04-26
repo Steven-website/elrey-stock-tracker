@@ -4,7 +4,7 @@
 
 import { State, Storage } from './state.js';
 import { API } from './api.js';
-import { ICON, $, escapeHtml, fmtDate, toast, feedback } from './utils.js';
+import { ICON, $, escapeHtml, fmtDate, toast, feedback, generateBoxCode } from './utils.js';
 import { login, logout, isAdmin, isAdminTienda, isSupervisor, canExport } from './auth.js';
 import { getPendingCount } from './queue.js';
 import { startScanner, stopScanner, isActive as scannerActive } from './scanner.js';
@@ -2151,141 +2151,503 @@ function renderUserMasView() {
 }
 
 // =====================================================================
-// CONTEO — vista del contador con tarea activa
+// CONTEO — wizard por artículo
 // =====================================================================
+
+const _CT_COLORS = {
+  'Iluminación': '#f59e0b',
+  'Eléctrico':   '#2563eb',
+  'Plomería':    '#16a34a',
+  'Ferretería':  '#dc2626',
+};
+function _ctColor(familia) { return _CT_COLORS[familia] || '#64748b'; }
+function _ctInitial(art) { return (art.familia || art.descripcion || '?')[0].toUpperCase(); }
+
+function _ctTopbar(stepLabel, color, onBack) {
+  const bar = $(`
+    <div class="ct-flow-topbar" style="border-left-color:${color};">
+      ${onBack ? `<button class="btn btn-sm" id="ct-back">← Volver</button>` : `<div></div>`}
+      <div class="ct-flow-step-label">${escapeHtml(stepLabel)}</div>
+    </div>
+  `);
+  if (onBack) bar.querySelector('#ct-back').onclick = onBack;
+  return bar;
+}
+
 function renderConteoView() {
   const wrap = $(`<div></div>`);
-  const tiendaId = State.user?.tienda_id;
+  const cf = State.cache.conteoFlow;
 
+  if (!cf) {
+    wrap.innerHTML = `
+      <div class="section">
+        <div class="section-title">${ICON.clipboard} Tarea de conteo</div>
+      </div>
+      <div id="ct-load" class="section"><div class="empty"><div class="loader"></div></div></div>
+    `;
+    const tiendaId = State.user?.tienda_id;
+    Promise.all([
+      API.getTareaConteoActiva(tiendaId),
+      API.getTiendaById(tiendaId)
+    ]).then(([tarea, tienda]) => {
+      if (!tarea) {
+        wrap.querySelector('#ct-load').innerHTML = `
+          <div class="empty" style="padding:32px 16px;">
+            ${ICON.clipboard}
+            <h3 style="margin-top:8px;">Sin tarea asignada</h3>
+            <p>El supervisor te asignará una tarea de conteo cuando sea necesario</p>
+          </div>
+        `;
+        return;
+      }
+      API.getConteoRegistros(tarea.id).then(registros => {
+        State.cache.conteoFlow = {
+          tarea, registros, step: null, artIdx: null,
+          tiendaCodigo: tienda?.codigo || 'A01'
+        };
+        render();
+      });
+    }).catch(e => {
+      const el = wrap.querySelector('#ct-load');
+      if (el) el.innerHTML = `<div class="empty"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
+    });
+    return wrap;
+  }
+
+  const { tarea, registros, step, artIdx } = cf;
+
+  if (step === null || artIdx === null) return _ctOverview(tarea, registros);
+
+  const art = tarea.articulos[artIdx];
+  if (!art) {
+    State.cache.conteoFlow = { ...cf, step: null, artIdx: null };
+    return _ctOverview(tarea, registros);
+  }
+  const color = _ctColor(art.familia);
+
+  switch (step) {
+    case 'info':       return _ctStepInfo(tarea, art, artIdx, color);
+    case 'exhibicion': return _ctStepExhibicion(tarea, art, artIdx, color);
+    case 'cajas':      return _ctStepCajas(tarea, art, artIdx, color);
+    case 'crear-caja': return _ctStepCrearCaja(tarea, art, artIdx, color);
+    case 'scan-caja':  return _ctStepScanCaja(tarea, art, artIdx, color);
+    case 'scan-prods': return _ctStepScanProds(tarea, art, artIdx, color);
+    case 'mas-cajas':  return _ctStepMasCajas(tarea, art, artIdx, color);
+    default:
+      State.cache.conteoFlow = { ...cf, step: null, artIdx: null };
+      return _ctOverview(tarea, registros);
+  }
+}
+
+function _ctOverview(tarea, registros) {
+  const arts = tarea.articulos;
+  const doneIds = new Set(registros.map(r => r.articulo_id));
+  const doneCount = arts.filter(a => doneIds.has(a.id)).length;
+  const pct = arts.length ? Math.round(doneCount / arts.length * 100) : 0;
+
+  const wrap = $(`<div></div>`);
   wrap.innerHTML = `
-    <div class="section" style="padding-bottom:0;">
-      <div class="section-title">${ICON.clipboard} Tarea de conteo</div>
+    <div class="section">
+      <div class="ct-task-card">
+        <div class="ct-task-title">${escapeHtml(tarea.nombre)}</div>
+        <div class="ct-task-meta">Asignada por ${escapeHtml(tarea.creador?.nombre || '—')}</div>
+        <div class="ct-progress"><div class="ct-progress-bar" style="width:${pct}%;"></div></div>
+        <div class="ct-task-meta" style="margin-top:4px;">${doneCount} de ${arts.length} artículo${arts.length !== 1 ? 's' : ''} contado${doneCount !== 1 ? 's' : ''}</div>
+      </div>
     </div>
-    <div id="conteo-body" class="section" style="padding-top:8px;">
-      <div class="empty"><div class="loader"></div></div>
+    <div class="section" style="padding-top:0;">
+      <div class="section-title" style="margin-bottom:12px;">Artículos a contar</div>
+      <div id="ct-arts-list"></div>
     </div>
   `;
 
-  Promise.all([
-    API.getTareaConteoActiva(tiendaId),
-    API.listCajas(false)
-  ]).then(([tarea, cajas]) => {
-    const body = wrap.querySelector('#conteo-body');
-    if (!tarea) {
-      body.innerHTML = `
-        <div class="empty" style="padding:32px 16px;">
-          ${ICON.clipboard}
-          <h3 style="margin-top:8px;">Sin tarea asignada</h3>
-          <p>El supervisor te asignará una tarea de conteo cuando sea necesario</p>
-        </div>
-      `;
-      return;
-    }
-
-    API.getConteoRegistros(tarea.id).then(registros => {
-      const regMap = {};
-      registros.forEach(r => { regMap[`${r.caja_id}_${r.articulo_id}`] = r; });
-
-      body.innerHTML = `
-        <div class="conteo-tarea-header">
-          <div class="conteo-tarea-nombre">${escapeHtml(tarea.nombre)}</div>
-          <div class="conteo-tarea-meta">
-            Asignada por ${escapeHtml(tarea.creador?.nombre || '—')}
+  const listEl = wrap.querySelector('#ct-arts-list');
+  arts.forEach((art, idx) => {
+    const done = doneIds.has(art.id);
+    const color = _ctColor(art.familia);
+    const card = $(`
+      <div class="ct-art-card ${done ? 'ct-art-done' : ''}">
+        <div class="ct-art-avatar" style="background:${color}22; color:${color};">${escapeHtml(_ctInitial(art))}</div>
+        <div class="ct-art-info">
+          <div class="ct-art-desc">${escapeHtml(art.descripcion)}</div>
+          <div class="ct-art-meta">
+            <span class="mono">${escapeHtml(art.sku)}</span>
+            ${art.familia ? `<span style="color:${color}; font-size:11px; margin-left:6px;">${escapeHtml(art.familia)}</span>` : ''}
           </div>
         </div>
-        <div id="conteo-articulos"></div>
-        <div style="padding:16px 0 24px;">
-          <button class="btn btn-primary btn-block" id="btn-enviar-conteo">
-            ${ICON.check} Enviar al supervisor para revisión
-          </button>
-        </div>
-      `;
-
-      const artsEl = body.querySelector('#conteo-articulos');
-
-      tarea.articulos.forEach(art => {
-        const cajasArt = cajas.filter(c =>
-          c.contenido?.some(i => i.articulo_id === art.id)
-        );
-
-        const artSection = $(`
-          <div class="conteo-art-section">
-            <div class="conteo-art-header">
-              <span class="mono" style="font-size:11px; color:var(--accent);">${escapeHtml(art.sku)}</span>
-              <span style="font-weight:600; font-size:13px;">${escapeHtml(art.descripcion)}</span>
-            </div>
-            <div class="conteo-cajas-list" id="cajaslist-${art.id}"></div>
-            <button class="btn btn-sm conteo-crear-btn" data-art-id="${art.id}" data-art-desc="${escapeHtml(art.descripcion)}">
-              ${ICON.add} Crear caja
-            </button>
-          </div>
-        `);
-
-        const cajasListEl = artSection.querySelector(`#cajaslist-${art.id}`);
-
-        if (!cajasArt.length) {
-          cajasListEl.innerHTML = `
-            <div style="font-size:12px; color:var(--muted); padding:8px 0;">
-              Sin cajas registradas para este artículo
-            </div>
-          `;
-        } else {
-          cajasArt.forEach(caja => {
-            const key = `${caja.id}_${art.id}`;
-            const reg = regMap[key];
-            const counted = !!reg;
-            const row = $(`
-              <div class="conteo-caja-row ${counted ? 'conteo-counted' : ''}">
-                <div class="conteo-caja-info">
-                  <div class="mono" style="font-size:11px; color:var(--accent);">${escapeHtml(caja.codigo_caja.slice(-12))}</div>
-                  <div class="conteo-caja-loc">${escapeHtml(caja.posicion?.ubicacion || 'Sin ubicar')}${caja.posicion?.descripcion ? ' · ' + escapeHtml(caja.posicion.descripcion) : ''}</div>
-                </div>
-                ${counted
-                  ? `<span class="pill pill-success" style="font-size:11px;">${ICON.check} Contado</span>`
-                  : `<button class="btn btn-sm btn-primary conteo-contar-btn" data-caja-id="${caja.id}" data-art-id="${art.id}">Contar</button>`
-                }
-              </div>
-            `);
-            row.querySelector('.conteo-contar-btn')?.addEventListener('click', () => {
-              State.cache.conteoTarget = { tarea_id: tarea.id, caja, art };
-              State.modal = 'conteoBox';
-              render();
-            });
-            cajasListEl.appendChild(row);
-          });
+        ${done
+          ? `<span class="pill pill-success" style="flex-shrink:0; font-size:11px;">${ICON.check}</span>`
+          : `<button class="btn btn-sm btn-primary" style="flex-shrink:0;" data-idx="${idx}">Contar</button>`
         }
-
-        artSection.querySelector('.conteo-crear-btn').addEventListener('click', () => {
-          State.cache.conteoNuevaCaja = {
-            tarea_id: tarea.id, art, tienda_id: tiendaId,
-            codigo: null, posicion_id: null
-          };
-          State.modal = 'conteoCrearCaja';
-          render();
-        });
-
-        artsEl.appendChild(artSection);
-      });
-
-      body.querySelector('#btn-enviar-conteo').onclick = async () => {
-        if (!confirm('¿Enviar el conteo al supervisor para revisión?')) return;
-        try {
-          await API.completarTareaConteo(tarea.id);
-          toast('Conteo enviado al supervisor ✓', 'success');
-          render();
-        } catch (e) {
-          toast('Error: ' + e.message, 'error');
-        }
-      };
-    }).catch(e => {
-      wrap.querySelector('#conteo-body').innerHTML =
-        `<div class="empty"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
+      </div>
+    `);
+    card.querySelector('[data-idx]')?.addEventListener('click', () => {
+      State.cache.conteoFlow = { ...State.cache.conteoFlow, artIdx: idx, step: 'info' };
+      render();
     });
-  }).catch(e => {
-    wrap.querySelector('#conteo-body').innerHTML =
-      `<div class="empty"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
+    listEl.appendChild(card);
   });
 
+  if (doneCount === arts.length && arts.length > 0) {
+    const btnWrap = $(`
+      <div class="section" style="padding-top:0; padding-bottom:24px;">
+        <button class="btn btn-primary btn-block" id="btn-enviar-conteo">
+          ${ICON.check} Enviar al supervisor para revisión
+        </button>
+      </div>
+    `);
+    btnWrap.querySelector('#btn-enviar-conteo').onclick = async () => {
+      if (!confirm('¿Enviar el conteo al supervisor para revisión?')) return;
+      try {
+        await API.completarTareaConteo(tarea.id);
+        State.cache.conteoFlow = null;
+        toast('Conteo enviado al supervisor ✓', 'success');
+        render();
+      } catch (e) {
+        toast('Error: ' + e.message, 'error');
+      }
+    };
+    wrap.appendChild(btnWrap);
+  }
+  return wrap;
+}
+
+function _ctStepInfo(tarea, art, artIdx, color) {
+  const wrap = $(`<div></div>`);
+  wrap.appendChild(_ctTopbar('Detalle del artículo', color, () => {
+    State.cache.conteoFlow = { ...State.cache.conteoFlow, step: null, artIdx: null };
+    render();
+  }));
+  const body = $(`
+    <div>
+      <div class="ct-art-hero" style="background:${color}12; border-bottom:3px solid ${color};">
+        <div class="ct-hero-avatar" style="background:${color}; color:#fff;">${escapeHtml(_ctInitial(art))}</div>
+        <div class="ct-hero-name">${escapeHtml(art.descripcion)}</div>
+        ${art.familia ? `<div class="ct-hero-fam" style="color:${color};">${escapeHtml(art.familia)}</div>` : ''}
+      </div>
+      <div class="section">
+        <div class="ct-detail-grid">
+          <div class="ct-detail-item">
+            <div class="ct-detail-label">SKU</div>
+            <div class="ct-detail-val mono">${escapeHtml(art.sku || '—')}</div>
+          </div>
+          <div class="ct-detail-item">
+            <div class="ct-detail-label">Código de barras</div>
+            <div class="ct-detail-val mono">${escapeHtml(art.codigo_barras || '—')}</div>
+          </div>
+          <div class="ct-detail-item">
+            <div class="ct-detail-label">Familia</div>
+            <div class="ct-detail-val">${escapeHtml(art.familia || '—')}</div>
+          </div>
+          <div class="ct-detail-item">
+            <div class="ct-detail-label">Uds. por caja</div>
+            <div class="ct-detail-val">${art.unidades_por_caja != null ? art.unidades_por_caja : '—'}</div>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-block" style="margin-top:20px;" id="ct-iniciar">
+          Iniciar conteo de este artículo
+        </button>
+      </div>
+    </div>
+  `);
+  body.querySelector('#ct-iniciar').onclick = () => {
+    State.cache.conteoFlow = { ...State.cache.conteoFlow, step: 'exhibicion', exhQty: 0, exhLoc: '' };
+    render();
+  };
+  wrap.appendChild(body);
+  return wrap;
+}
+
+function _ctStepExhibicion(tarea, art, artIdx, color) {
+  const wrap = $(`<div></div>`);
+  const cf = State.cache.conteoFlow;
+  wrap.appendChild(_ctTopbar('Exhibición en piso', color, () => {
+    State.cache.conteoFlow = { ...cf, step: 'info' };
+    render();
+  }));
+  const body = $(`
+    <div class="section">
+      <div class="ct-step-title">¿Cuántas unidades hay en exhibición?</div>
+      <p class="ct-step-hint">Contá las unidades visibles en vitrina o estante de pasillo.</p>
+      <div class="ct-qty-row">
+        <button class="btn ct-qty-btn" id="ct-m">−</button>
+        <input class="input ct-qty-input" id="ct-qty-exh" type="number" min="0" value="${cf.exhQty ?? 0}" />
+        <button class="btn ct-qty-btn" id="ct-p">+</button>
+      </div>
+      <label class="label" style="display:block; margin-bottom:6px;">Pasillo / ubicación <span style="color:var(--muted);">(opcional)</span></label>
+      <input class="input" id="ct-exh-loc" placeholder="Ej: Pasillo 3, estante B" value="${escapeHtml(cf.exhLoc || '')}" autocomplete="off" />
+      <button class="btn btn-primary btn-block" style="margin-top:20px;" id="ct-exh-ok">Continuar</button>
+    </div>
+  `);
+  const qi = body.querySelector('#ct-qty-exh');
+  body.querySelector('#ct-m').onclick = () => { qi.value = Math.max(0, (parseInt(qi.value) || 0) - 1); };
+  body.querySelector('#ct-p').onclick = () => { qi.value = (parseInt(qi.value) || 0) + 1; };
+  body.querySelector('#ct-exh-ok').onclick = () => {
+    State.cache.conteoFlow = {
+      ...cf, step: 'cajas',
+      exhQty: Math.max(0, parseInt(qi.value) || 0),
+      exhLoc: body.querySelector('#ct-exh-loc').value.trim()
+    };
+    render();
+  };
+  wrap.appendChild(body);
+  return wrap;
+}
+
+function _ctStepCajas(tarea, art, artIdx, color) {
+  const wrap = $(`<div></div>`);
+  const cf = State.cache.conteoFlow;
+  wrap.appendChild(_ctTopbar('¿Posee cajas?', color, () => {
+    State.cache.conteoFlow = { ...cf, step: 'exhibicion' };
+    render();
+  }));
+  const body = $(`
+    <div class="section">
+      <div class="ct-step-title">${escapeHtml(art.descripcion)}</div>
+      <p class="ct-step-hint">¿Hay cajas en bodega con este artículo?</p>
+      <div class="ct-yn-grid">
+        <button class="ct-yn-btn ct-yn-yes" id="ct-si">${ICON.box}<span>Sí, hay cajas</span></button>
+        <button class="ct-yn-btn ct-yn-no"  id="ct-no">${ICON.close}<span>No hay cajas</span></button>
+      </div>
+    </div>
+  `);
+  body.querySelector('#ct-si').onclick = () => {
+    State.cache.conteoFlow = { ...cf, step: 'crear-caja', cajasCreadas: [] };
+    render();
+  };
+  body.querySelector('#ct-no').onclick = async () => {
+    try {
+      await API.registrarConteo({
+        tarea_id: tarea.id, caja_id: null,
+        articulo_id: art.id, cantidad_fisica: cf.exhQty || 0
+      });
+      const registros = await API.getConteoRegistros(tarea.id);
+      State.cache.conteoFlow = { ...cf, registros, step: null, artIdx: null };
+      toast('Conteo de ' + art.descripcion + ' registrado ✓', 'success');
+      render();
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  };
+  wrap.appendChild(body);
+  return wrap;
+}
+
+function _ctStepCrearCaja(tarea, art, artIdx, color) {
+  const wrap = $(`<div></div>`);
+  const cf = State.cache.conteoFlow;
+  const newCode = generateBoxCode(cf.tiendaCodigo || 'A01');
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(newCode)}`;
+  wrap.appendChild(_ctTopbar('Crear caja', color, () => {
+    State.cache.conteoFlow = { ...cf, step: 'cajas' };
+    render();
+  }));
+  const body = $(`
+    <div class="section">
+      <div class="ct-step-title">Nueva caja — imprimí la etiqueta</div>
+      <div class="ct-qr-block">
+        <div class="ct-qr-code mono">${escapeHtml(newCode)}</div>
+        <img class="ct-qr-img" src="${qrUrl}" alt="QR caja" />
+        <button class="btn btn-sm" id="ct-print">${ICON.qr} Imprimir QR</button>
+        <p class="ct-qr-hint">Pegá la etiqueta en la caja antes de continuar.</p>
+      </div>
+      <label class="label" style="display:block; margin:16px 0 6px;">Ubicación / bodega <span style="color:var(--muted);">(opcional)</span></label>
+      <input class="input" id="ct-caja-loc" placeholder="Ej: Bodega 2, fila C" autocomplete="off" />
+      <button class="btn btn-primary btn-block" style="margin-top:16px;" id="ct-ir-scan">
+        ${ICON.barcode} Etiqueta pegada — escanear caja
+      </button>
+    </div>
+  `);
+  body.querySelector('#ct-print').onclick = () => { window.open(qrUrl, '_blank'); };
+  body.querySelector('#ct-ir-scan').onclick = () => {
+    const loc = body.querySelector('#ct-caja-loc').value.trim();
+    State.cache.conteoFlow = { ...cf, step: 'scan-caja', pendingBox: { code: newCode, loc } };
+    render();
+  };
+  wrap.appendChild(body);
+  return wrap;
+}
+
+function _ctStepScanCaja(tarea, art, artIdx, color) {
+  const wrap = $(`<div></div>`);
+  const cf = State.cache.conteoFlow;
+  const { pendingBox } = cf;
+  let confirmed = false;
+  wrap.appendChild(_ctTopbar('Confirmar caja', color, () => {
+    stopScanner();
+    State.cache.conteoFlow = { ...cf, step: 'crear-caja' };
+    render();
+  }));
+  const body = $(`
+    <div class="section">
+      <div class="ct-step-title">Escanear caja</div>
+      <p class="ct-step-hint">Apuntá la cámara al QR de la etiqueta que acabás de pegar.</p>
+      <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">
+        Esperando: <span class="mono" style="color:var(--accent);">${escapeHtml(pendingBox.code)}</span>
+      </p>
+      <div id="ct-scan-caja-div" style="border-radius:var(--radius); overflow:hidden; margin-bottom:12px; min-height:150px;"></div>
+      <details style="margin-top:8px;">
+        <summary style="font-size:12px; color:var(--muted); cursor:pointer;">Ingresar código manualmente</summary>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input class="input mono" id="ct-manual-code" placeholder="${escapeHtml(pendingBox.code)}" style="flex:1;" autocomplete="off" />
+          <button class="btn btn-primary" id="ct-manual-ok">OK</button>
+        </div>
+      </details>
+    </div>
+  `);
+  const confirmCode = (scanned) => {
+    if (confirmed) return;
+    if (scanned.trim() !== pendingBox.code) { toast('Código no coincide — verificá la etiqueta', 'error'); return; }
+    confirmed = true;
+    stopScanner();
+    State.cache.conteoFlow = { ...cf, step: 'scan-prods', scannedProds: [] };
+    render();
+  };
+  body.querySelector('#ct-manual-ok').onclick = () => confirmCode(body.querySelector('#ct-manual-code').value);
+  body.querySelector('#ct-manual-code').onkeydown = e => { if (e.key === 'Enter') confirmCode(e.target.value); };
+  wrap.appendChild(body);
+  setTimeout(() => { if (wrap.isConnected) startScanner('ct-scan-caja-div', confirmCode); }, 100);
+  return wrap;
+}
+
+function _ctStepScanProds(tarea, art, artIdx, color) {
+  const wrap = $(`<div></div>`);
+  const cf = State.cache.conteoFlow;
+  let prods = [...(cf.scannedProds || [])];
+  wrap.appendChild(_ctTopbar('Asociar artículos', color, () => {
+    stopScanner();
+    State.cache.conteoFlow = { ...cf, step: 'scan-caja', scannedProds: prods };
+    render();
+  }));
+  const body = $(`
+    <div class="section">
+      <div class="ct-step-title">Escaneá los artículos de la caja</div>
+      <p class="ct-step-hint" style="margin-bottom:12px;">
+        Caja: <span class="mono" style="color:var(--accent);">${escapeHtml(cf.pendingBox?.code?.slice(-12) || '—')}</span>
+      </p>
+      <div id="ct-scan-prods-div" style="border-radius:var(--radius); overflow:hidden; margin-bottom:12px; min-height:100px;"></div>
+      <div style="display:flex; gap:8px; margin-bottom:12px;">
+        <input class="input mono" id="ct-prod-input" placeholder="Código de barras" style="flex:1;" autocomplete="off" />
+        <button class="btn" id="ct-prod-add">${ICON.add}</button>
+      </div>
+      <div id="ct-prods-list" style="margin-bottom:16px;"></div>
+      <button class="btn btn-primary btn-block" id="ct-prods-done">${ICON.check} Caja lista</button>
+    </div>
+  `);
+  const listEl = body.querySelector('#ct-prods-list');
+  const renderProds = () => {
+    listEl.innerHTML = '';
+    if (!prods.length) {
+      listEl.innerHTML = `<div style="font-size:12px; color:var(--muted);">Sin artículos escaneados todavía</div>`;
+      return;
+    }
+    prods.forEach((p, i) => {
+      const row = $(`
+        <div class="ct-prod-row">
+          <span class="mono" style="flex:1; font-size:12px; word-break:break-all;">${escapeHtml(p.barcode)}</span>
+          <div class="ct-qty-mini">
+            <button class="btn btn-sm ct-qm" data-i="${i}" data-d="-1">−</button>
+            <span style="min-width:28px; text-align:center;">${p.cantidad}</span>
+            <button class="btn btn-sm ct-qm" data-i="${i}" data-d="1">+</button>
+          </div>
+          <button class="btn btn-sm ct-del" data-i="${i}" style="color:var(--danger); border-color:var(--danger); padding:4px 8px;">${ICON.trash}</button>
+        </div>
+      `);
+      listEl.appendChild(row);
+    });
+    listEl.querySelectorAll('.ct-qm').forEach(b => {
+      b.onclick = () => {
+        const i = +b.dataset.i, d = +b.dataset.d;
+        prods[i] = { ...prods[i], cantidad: Math.max(1, prods[i].cantidad + d) };
+        State.cache.conteoFlow = { ...State.cache.conteoFlow, scannedProds: [...prods] };
+        renderProds();
+      };
+    });
+    listEl.querySelectorAll('.ct-del').forEach(b => {
+      b.onclick = () => {
+        prods = prods.filter((_, j) => j !== +b.dataset.i);
+        State.cache.conteoFlow = { ...State.cache.conteoFlow, scannedProds: [...prods] };
+        renderProds();
+      };
+    });
+  };
+  renderProds();
+  const addBarcode = (barcode) => {
+    const clean = barcode.trim();
+    if (!clean) return;
+    const idx = prods.findIndex(p => p.barcode === clean);
+    if (idx >= 0) { prods[idx] = { ...prods[idx], cantidad: prods[idx].cantidad + 1 }; }
+    else { prods.push({ barcode: clean, cantidad: 1 }); }
+    State.cache.conteoFlow = { ...State.cache.conteoFlow, scannedProds: [...prods] };
+    renderProds();
+    feedback();
+    toast('Escaneado: ' + clean, 'info');
+  };
+  const inp = body.querySelector('#ct-prod-input');
+  body.querySelector('#ct-prod-add').onclick = () => { addBarcode(inp.value); inp.value = ''; };
+  inp.onkeydown = e => { if (e.key === 'Enter') { addBarcode(e.target.value); e.target.value = ''; } };
+  body.querySelector('#ct-prods-done').onclick = async () => {
+    stopScanner();
+    if (!prods.length && !confirm('¿Crear caja sin artículos escaneados?')) return;
+    try {
+      const totalQty = prods.reduce((s, p) => s + p.cantidad, 0);
+      const newCaja = await API.createCaja({
+        codigo_caja: cf.pendingBox.code,
+        tipo_caja: 'producto',
+        posicion_id: null,
+        items: prods.length
+          ? prods.map(p => ({ articulo_id: art.id, cantidad: p.cantidad }))
+          : [{ articulo_id: art.id, cantidad: 1 }],
+        motivo: 'Conteo tarea #' + tarea.id
+      });
+      await API.registrarConteo({
+        tarea_id: tarea.id, caja_id: newCaja.id,
+        articulo_id: art.id, cantidad_fisica: totalQty || prods.length
+      });
+      const cajasCreadas = [...(cf.cajasCreadas || []), { ...newCaja, _prodCount: prods.length }];
+      State.cache.conteoFlow = { ...cf, step: 'mas-cajas', cajasCreadas, scannedProds: [] };
+      render();
+    } catch (e) { toast('Error al guardar caja: ' + e.message, 'error'); }
+  };
+  wrap.appendChild(body);
+  setTimeout(() => { if (wrap.isConnected) startScanner('ct-scan-prods-div', addBarcode); }, 100);
+  return wrap;
+}
+
+function _ctStepMasCajas(tarea, art, artIdx, color) {
+  const wrap = $(`<div></div>`);
+  const cf = State.cache.conteoFlow;
+  const { cajasCreadas = [] } = cf;
+  wrap.appendChild(_ctTopbar('Cajas registradas', color, null));
+  const body = $(`
+    <div class="section">
+      <div class="ct-step-title">${cajasCreadas.length} caja${cajasCreadas.length !== 1 ? 's' : ''} creada${cajasCreadas.length !== 1 ? 's' : ''}</div>
+      <div class="ct-cajas-summary">
+        ${cajasCreadas.map(c => `
+          <div class="ct-caja-summary-row">
+            <span style="color:var(--success);">${ICON.check}</span>
+            <span class="mono" style="font-size:12px; flex:1;">${escapeHtml(c.codigo_caja?.slice(-12) || String(c.id))}</span>
+            <span style="font-size:11px; color:var(--muted);">${c._prodCount ?? '?'} ref.</span>
+          </div>
+        `).join('')}
+      </div>
+      <div class="ct-yn-grid" style="margin-top:20px;">
+        <button class="ct-yn-btn ct-yn-yes" id="ct-otra">${ICON.add}<span>Crear otra caja</span></button>
+        <button class="ct-yn-btn ct-yn-no"  id="ct-listo">${ICON.check}<span>Listo con este artículo</span></button>
+      </div>
+    </div>
+  `);
+  body.querySelector('#ct-otra').onclick = () => {
+    State.cache.conteoFlow = { ...cf, step: 'crear-caja' };
+    render();
+  };
+  body.querySelector('#ct-listo').onclick = async () => {
+    try {
+      const registros = await API.getConteoRegistros(tarea.id);
+      State.cache.conteoFlow = { ...cf, registros, step: null, artIdx: null };
+      toast('Artículo ' + art.descripcion + ' completado ✓', 'success');
+      render();
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  };
+  wrap.appendChild(body);
   return wrap;
 }
 
