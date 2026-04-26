@@ -8,6 +8,7 @@ import { getQueue, dequeue, getPendingCount } from './queue.js';
 import { initMockPasswords } from './mock.js';
 import { stopScanner } from './scanner.js';
 import { $ } from './utils.js';
+import { logEvent } from './audit.js';
 import {
   renderLogin, renderShell
 } from './views.js';
@@ -20,7 +21,7 @@ import {
   renderCreateUserModal, renderEditUserModal,
   renderScanForSearchModal,
   renderArticulosModal, renderCreateArticuloModal, renderEditArticuloModal,
-  renderTiendasModal
+  renderTiendasModal, renderAuditModal
 } from './modals.js';
 
 // =====================================================================
@@ -53,7 +54,8 @@ export function render() {
       articulos:       renderArticulosModal,
       createArticulo:  renderCreateArticuloModal,
       editArticulo:    renderEditArticuloModal,
-      tiendas:         renderTiendasModal
+      tiendas:         renderTiendasModal,
+      audit:           renderAuditModal
     };
     const renderer = map[State.modal];
     if (renderer) root.appendChild(renderer());
@@ -105,7 +107,7 @@ export function resetInactivityTimer() {
   const minutes = State.config.inactivityMinutes ?? 10;
   if (!minutes) return; // 0 = nunca
   _inactivityTimer = setTimeout(() => {
-    forceLogout('Sesión cerrada por inactividad — volvé a ingresar');
+    forceLogout('Sesión cerrada por inactividad — volvé a ingresar', 'logout_inactividad');
   }, minutes * 60_000);
 }
 
@@ -119,8 +121,9 @@ function startInactivityWatch() {
 // =====================================================================
 // SESSION CHECK — revoca acceso si el usuario fue desactivado o venció su límite
 // =====================================================================
-function forceLogout(message) {
+function forceLogout(message, auditTipo = 'logout_revocado') {
   if (_inactivityTimer) { clearTimeout(_inactivityTimer); _inactivityTimer = null; }
+  logEvent(auditTipo, { username: State.user?.username });
   State.user = null;
   State.modal = null;
   Storage.remove('user');

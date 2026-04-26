@@ -715,6 +715,11 @@ function renderAdminMasView() {
           <span>Tiendas</span>
           <small>Sucursales y stock</small>
         </button>
+        <button class="admin-module" id="mod-audit">
+          ${ICON.list}
+          <span>Auditoría</span>
+          <small>Log de sesiones</small>
+        </button>
       </div>
     </div>
 
@@ -829,6 +834,7 @@ function renderAdminMasView() {
 
   wrap.querySelector('#mod-articulos').onclick  = () => { State.modal = 'articulos';  render(); };
   wrap.querySelector('#mod-tiendas').onclick     = () => { State.modal = 'tiendas';    render(); };
+  wrap.querySelector('#mod-audit').onclick       = () => { State.modal = 'audit';      render(); };
   wrap.querySelector('#btn-new-user').onclick    = () => { State.cache.editingUser = null; State.modal = 'createUser'; render(); };
   wrap.querySelector('#cfg-supabase').onclick    = () => { State.modal = 'config';     render(); };
   wrap.querySelector('#btn-logout').onclick      = () => { if (!confirm('¿Cerrar sesión?')) return; logout(); render(); };

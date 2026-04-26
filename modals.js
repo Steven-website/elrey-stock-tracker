@@ -9,6 +9,7 @@ import { ICON, $, escapeHtml, fmtDate, fmtDateTime, toast, generateBoxCode, feed
 import { isValidUsername, isValidPassword, isAdminTienda } from './auth.js';
 import { startScanner, stopScanner } from './scanner.js';
 import { render } from './main.js';
+import { logEvent, getAuditLog, clearAuditLog, AUDIT_TIPO } from './audit.js';
 
 // =====================================================================
 // HELPERS
@@ -848,6 +849,7 @@ export function renderCreateUserModal() {
         username, nombre, email, rol, password,
         tienda_id: State.user.tienda_id
       });
+      logEvent('usuario_creado', { username: State.user.username, detalles: username });
       toast(`Usuario ${username} creado`, 'success');
       State.modal = null; State.view = 'mas'; render();
     } catch (e) {
@@ -902,6 +904,8 @@ export function renderEditUserModal() {
       try {
         if (u.activo) await API.deactivateUser(u.id);
         else await API.activateUser(u.id);
+        logEvent(u.activo ? 'usuario_desactivado' : 'usuario_activado',
+          { username: State.user.username, detalles: u.username });
         toast(`Usuario ${u.activo ? 'desactivado' : 'reactivado'}`, 'success');
         State.modal = null; State.view = 'mas'; render();
       } catch (e) { errEl.textContent = e.message; }
@@ -991,6 +995,7 @@ export function renderEditUserModal() {
     if (!isValidPassword(newPass)) { errEl.textContent = 'Mínimo 6 caracteres'; return; }
     try {
       await API.resetUserPassword(u.id, newPass);
+      logEvent('pwd_reset', { username: State.user.username, detalles: u.username });
       toast(`Contraseña reseteada para ${u.username}`, 'success');
       modal.querySelector('#e-newpass').value = '';
     } catch (e) { errEl.textContent = e.message; }
@@ -1002,6 +1007,8 @@ export function renderEditUserModal() {
     try {
       if (u.activo) await API.deactivateUser(u.id);
       else await API.activateUser(u.id);
+      logEvent(u.activo ? 'usuario_desactivado' : 'usuario_activado',
+        { username: State.user.username, detalles: u.username });
       toast(`Usuario ${action === 'desactivar' ? 'desactivado' : 'reactivado'}`, 'success');
       State.modal = null; State.view = 'mas'; render();
     } catch (e) { errEl.textContent = e.message; }
@@ -1386,5 +1393,47 @@ export function renderTiendasModal() {
   });
 
   modal.querySelector('#btn-close-tiendas').onclick = () => closeModal();
+  return modal;
+}
+
+// =====================================================================
+// AUDITORÍA DE SESIONES
+// =====================================================================
+export function renderAuditModal() {
+  const events = getAuditLog(150);
+
+  const bodyHtml = `
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+      <span style="font-size:12px; color:var(--muted);">${events.length} evento${events.length !== 1 ? 's' : ''} en este dispositivo</span>
+      <button class="btn" id="clear-audit" style="font-size:11px; padding:4px 10px;">${ICON.trash} Limpiar</button>
+    </div>
+    <div id="audit-list" class="stack" style="max-height:62vh; overflow-y:auto; gap:4px;">
+      ${events.length ? '' : '<div class="empty" style="padding:20px 0;"><p>Sin eventos registrados todavía</p></div>'}
+    </div>
+  `;
+  const footerHtml = `<button class="btn btn-block" id="audit-close">Cerrar</button>`;
+  const modal = modalShell(`${ICON.shield} Auditoría de sesiones`, bodyHtml, footerHtml);
+
+  const list = modal.querySelector('#audit-list');
+  events.forEach(ev => {
+    const meta = AUDIT_TIPO[ev.tipo] || { label: ev.tipo, color: 'muted' };
+    list.appendChild($(`
+      <div class="audit-item">
+        <span class="pill pill-${meta.color} audit-pill">${meta.label}</span>
+        <span class="audit-user mono">${escapeHtml(ev.username || '—')}</span>
+        ${ev.detalles ? `<span class="audit-detail">${escapeHtml(ev.detalles)}</span>` : ''}
+        <span class="audit-time">${fmtDate(ev.creado_at)}</span>
+      </div>
+    `));
+  });
+
+  modal.querySelector('#clear-audit').onclick = () => {
+    if (!confirm('¿Eliminar todos los eventos del log local?')) return;
+    clearAuditLog();
+    toast('Log de auditoría limpiado', 'success');
+    closeModal();
+  };
+  modal.querySelector('#audit-close').onclick = () => closeModal();
+
   return modal;
 }
