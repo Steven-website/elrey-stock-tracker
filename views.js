@@ -612,7 +612,7 @@ function renderAdminMasView() {
 }
 
 // =====================================================================
-// MÁS — vista Admin Tienda: solo gestión de usuarios de su tienda
+// MÁS — vista Admin Tienda: dashboard de su tienda + gestión de usuarios
 // =====================================================================
 function renderAdminTiendaMasView() {
   const wrap = $(`<div></div>`);
@@ -621,13 +621,22 @@ function renderAdminTiendaMasView() {
   wrap.innerHTML = `
     <div class="admin-header">
       <div>
-        <div class="admin-header-title">${ICON.shield} Admin Tienda</div>
+        <div class="admin-header-title">${ICON.shield} <span id="at-tienda-nombre">Mi tienda</span></div>
         <div class="admin-header-sub">${escapeHtml(State.user.nombre)} · ${escapeHtml(State.user.username)}</div>
       </div>
       <span class="pill pill-accent">Admi Tienda</span>
     </div>
 
     <div class="section">
+      <div class="section-title">Resumen de tu tienda</div>
+      <div class="kpi-grid" id="at-kpi-grid">
+        <div class="kpi-card" style="grid-column:1/-1; text-align:center;">
+          <div class="loader"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section" style="padding-top:0;">
       <div class="section-title">Usuarios de tu tienda</div>
       <div id="at-users" class="stack">
         <div class="empty"><div class="loader"></div></div>
@@ -649,9 +658,65 @@ function renderAdminTiendaMasView() {
     </div>
   `;
 
+  // Nombre de la tienda
+  API.listTiendas().then(tiendas => {
+    const t = tiendas.find(x => x.id === myTiendaId);
+    if (t) wrap.querySelector('#at-tienda-nombre').textContent = t.nombre;
+  });
+
+  // KPIs filtrados por tienda
+  const hoy = new Date().toDateString();
+  Promise.all([
+    API.listCajas(false),
+    API.listCajas(true),
+    API.listMovimientos(500),
+    API.listUsers(false)
+  ]).then(([activas, todas, movs, usuarios]) => {
+    const inTienda = c => (c.tienda_id === myTiendaId) || (c.posicion?.tienda_id === myTiendaId);
+    const misActivas   = activas.filter(inTienda);
+    const misConsumed  = todas.filter(c => inTienda(c) && c.estado === 'vacia');
+    const totalUnid    = misActivas.reduce((s, c) => s + (c.unidades_totales || 0), 0);
+    const stockBajo    = misActivas.filter(c => (c.unidades_totales || 0) <= 5).length;
+    const misMovsHoy   = movs.filter(m => {
+      const caja = activas.find(c => c.id === m.caja_id) || todas.find(c => c.id === m.caja_id);
+      return caja && inTienda(caja) && new Date(m.creado_at).toDateString() === hoy;
+    }).length;
+    const misUsuarios  = usuarios.filter(u => u.tienda_id === myTiendaId).length;
+
+    wrap.querySelector('#at-kpi-grid').innerHTML = `
+      <div class="kpi-card">
+        <div class="kpi-val">${misActivas.length}</div>
+        <div class="kpi-label">Cajas activas</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val">${totalUnid}</div>
+        <div class="kpi-label">Unidades</div>
+      </div>
+      <div class="kpi-card ${stockBajo > 0 ? 'kpi-warn' : ''}">
+        <div class="kpi-val">${stockBajo}</div>
+        <div class="kpi-label">Stock bajo</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val">${misMovsHoy}</div>
+        <div class="kpi-label">Mov. hoy</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val">${misUsuarios}</div>
+        <div class="kpi-label">Usuarios</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val">${misConsumed.length}</div>
+        <div class="kpi-label">Cajas vacías</div>
+      </div>
+    `;
+  }).catch(() => {
+    wrap.querySelector('#at-kpi-grid').innerHTML =
+      `<div class="kpi-card" style="grid-column:1/-1;"><div class="kpi-label">Error al cargar estadísticas</div></div>`;
+  });
+
+  // Lista de usuarios (supervisores + operarios + contadores + auditores de la tienda)
   API.listUsers(true).then(users => {
     const list = wrap.querySelector('#at-users');
-    // Solo usuarios de la misma tienda, excluir admin y admin_tienda
     const filtered = users.filter(u =>
       u.tienda_id === myTiendaId &&
       u.id !== State.user.id &&
