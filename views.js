@@ -343,28 +343,94 @@ export function renderCajasView() {
 // MOVIMIENTOS VIEW
 // =====================================================================
 export function renderMovView() {
+  if (!State.cache.movFilter) State.cache.movFilter = 'all';
+  const hoy = new Date().toDateString();
   const wrap = $(`<div></div>`);
+
   wrap.innerHTML = `
-    <div class="section">
-      <div class="section-title">Últimos movimientos <small id="mov-count"></small></div>
+    <div class="section" style="padding-bottom:8px;">
+      <div class="mov-filter-bar">
+        <button class="mov-filter-btn ${State.cache.movFilter === 'all' ? 'active' : ''}" data-f="all">
+          ${ICON.list} Todos
+        </button>
+        <button class="mov-filter-btn ${State.cache.movFilter === 'mine' ? 'active' : ''}" data-f="mine">
+          ${ICON.user} Mis movimientos hoy
+        </button>
+      </div>
+    </div>
+    <div class="section" style="padding-top:0;">
+      <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
+        <span id="mov-title">Cargando…</span>
+        <small id="mov-count" style="font-weight:400; color:var(--muted); font-size:10px;"></small>
+      </div>
+      <div id="mov-summary" style="display:none; margin-bottom:10px;"></div>
       <div id="mov-list" class="stack">
         <div class="empty"><div class="loader"></div></div>
       </div>
     </div>
   `;
-  API.listMovimientos(50).then(movs => {
+
+  let allMovs = [];
+
+  function applyFilter() {
+    const f = State.cache.movFilter;
+    const filtered = f === 'mine'
+      ? allMovs.filter(m =>
+          new Date(m.creado_at).toDateString() === hoy &&
+          (m.usuario_id === State.user.id || m.usuario?.username === State.user.username)
+        )
+      : allMovs;
+
+    wrap.querySelector('#mov-title').textContent =
+      f === 'mine' ? 'Mis movimientos de hoy' : 'Últimos movimientos';
+    wrap.querySelector('#mov-count').textContent = `${filtered.length} eventos`;
+
+    // Resumen rápido para "mis movimientos hoy"
+    const summary = wrap.querySelector('#mov-summary');
+    if (f === 'mine' && filtered.length > 0) {
+      const salidas  = filtered.filter(m => m.tipo === 'reducir').reduce((s, m) => s + (m.cantidad || 0), 0);
+      const entradas = filtered.filter(m => m.tipo === 'aumentar').reduce((s, m) => s + (m.cantidad || 0), 0);
+      const cajas    = filtered.filter(m => m.tipo === 'crear_caja').length;
+      summary.style.display = 'flex';
+      summary.innerHTML = `
+        <div class="mov-summary-bar">
+          <div class="mov-summary-item"><span class="mov-summary-val" style="color:var(--danger);">${salidas}</span><span class="mov-summary-lbl">salidas</span></div>
+          <div class="mov-summary-item"><span class="mov-summary-val" style="color:var(--success);">${entradas}</span><span class="mov-summary-lbl">entradas</span></div>
+          <div class="mov-summary-item"><span class="mov-summary-val" style="color:var(--accent);">${cajas}</span><span class="mov-summary-lbl">cajas</span></div>
+        </div>
+      `;
+    } else {
+      summary.style.display = 'none';
+    }
+
     const list = wrap.querySelector('#mov-list');
-    wrap.querySelector('#mov-count').textContent = `${movs.length} eventos`;
     list.innerHTML = '';
-    if (!movs.length) {
-      list.innerHTML = `<div class="empty">${ICON.empty}<h3>Sin movimientos</h3><p>Todavía no hay actividad</p></div>`;
+    if (!filtered.length) {
+      const msg = f === 'mine' ? 'No registraste movimientos hoy' : 'Todavía no hay actividad';
+      list.innerHTML = `<div class="empty">${ICON.empty}<h3>Sin movimientos</h3><p>${msg}</p></div>`;
       return;
     }
-    movs.forEach(m => list.appendChild(movListItem(m)));
+    filtered.forEach(m => list.appendChild(movListItem(m)));
+  }
+
+  wrap.querySelectorAll('.mov-filter-btn').forEach(btn => {
+    btn.onclick = () => {
+      State.cache.movFilter = btn.dataset.f;
+      wrap.querySelectorAll('.mov-filter-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.f === State.cache.movFilter)
+      );
+      applyFilter();
+    };
+  });
+
+  API.listMovimientos(200).then(movs => {
+    allMovs = movs;
+    applyFilter();
   }).catch(e => {
     wrap.querySelector('#mov-list').innerHTML =
       `<div class="empty"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
   });
+
   return wrap;
 }
 

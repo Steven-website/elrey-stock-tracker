@@ -778,6 +778,68 @@ main {
 }
 .tienda-caja-pos { color: var(--muted); }
 
+/* ---- Filtro de movimientos ------------------------------------------- */
+.mov-filter-bar {
+  display: flex;
+  gap: 6px;
+}
+
+.mov-filter-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  transition: background 0.1s, border-color 0.1s, color 0.1s;
+}
+
+.mov-filter-btn svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+.mov-filter-btn.active {
+  background: rgba(245,184,0,0.08);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.mov-summary-bar {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.mov-summary-item {
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  text-align: center;
+}
+
+.mov-summary-val {
+  display: block;
+  font-size: 22px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  line-height: 1.1;
+}
+
+.mov-summary-lbl {
+  display: block;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 2px;
+}
+
 /* ---- Atajos de cantidad rápida --------------------------------------- */
 .qty-shortcuts {
   display: flex;
