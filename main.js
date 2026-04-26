@@ -21,7 +21,8 @@ import {
   renderCreateUserModal, renderEditUserModal,
   renderScanForSearchModal,
   renderArticulosModal, renderCreateArticuloModal, renderEditArticuloModal,
-  renderTiendasModal, renderAuditModal
+  renderTiendasModal, renderAuditModal,
+  renderMoverLoteModal
 } from './modals.js';
 
 // =====================================================================
@@ -55,7 +56,8 @@ export function render() {
       createArticulo:  renderCreateArticuloModal,
       editArticulo:    renderEditArticuloModal,
       tiendas:         renderTiendasModal,
-      audit:           renderAuditModal
+      audit:           renderAuditModal,
+      moverLote:       renderMoverLoteModal
     };
     const renderer = map[State.modal];
     if (renderer) root.appendChild(renderer());

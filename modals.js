@@ -760,6 +760,90 @@ async function handleProductScanned(code) {
 }
 
 // =====================================================================
+// MOVER LOTE — modal de confirmación de traslado masivo
+// =====================================================================
+export function renderMoverLoteModal() {
+  const lote = State.cache.loteBoxes || [];
+  const bodyHtml = `
+    <div style="font-size:13px; color:var(--text-2); margin-bottom:12px;">
+      <strong style="color:var(--text);">${lote.length} caja${lote.length !== 1 ? 's' : ''}</strong> se trasladarán a la nueva ubicación:
+    </div>
+    <div style="max-height:130px; overflow-y:auto; border:1px solid var(--border); border-radius:10px; padding:8px 12px; margin-bottom:16px; background:var(--surface);">
+      ${lote.map(c => `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:4px 0; border-bottom:1px solid var(--border-2);">
+          <span class="mono" style="font-size:12px; color:var(--accent);">${escapeHtml(c.codigo_caja)}</span>
+          <span style="font-size:11px; color:var(--muted);">${escapeHtml(c.posicion?.ubicacion || '—')}</span>
+        </div>
+      `).join('')}
+    </div>
+    <label class="label">Nueva ubicación</label>
+    <select class="select" id="lote-new-pos">
+      <option value="">— Seleccioná —</option>
+    </select>
+    <label class="label" style="margin-top:16px;">Nota rápida (opcional)</label>
+    <div class="note-chips">
+      ${['Reorganización', 'Temporada', 'Solicitud encargado', 'Más espacio', 'Corrección'].map(n =>
+        `<button class="note-chip" data-note="${n}">${n}</button>`
+      ).join('')}
+    </div>
+  `;
+  const footerHtml = `
+    <button class="btn grow" id="lote-cancel">Cancelar</button>
+    <button class="btn btn-primary grow" id="lote-confirm">Mover ${lote.length} cajas</button>
+  `;
+  const modal = modalShell(`Mover ${lote.length} caja${lote.length !== 1 ? 's' : ''}`, bodyHtml, footerHtml);
+
+  API.listPosiciones().then(positions => {
+    const sel = modal.querySelector('#lote-new-pos');
+    positions.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = `${p.ubicacion} · ${p.descripcion}`;
+      sel.appendChild(opt);
+    });
+  });
+
+  modal.querySelectorAll('.note-chip').forEach(btn => {
+    btn.onclick = () => {
+      const active = btn.classList.contains('active');
+      modal.querySelectorAll('.note-chip').forEach(b => b.classList.remove('active'));
+      if (!active) btn.classList.add('active');
+    };
+  });
+
+  modal.querySelector('#lote-cancel').onclick = () => { State.modal = null; render(); };
+
+  modal.querySelector('#lote-confirm').onclick = async () => {
+    const newPosId = parseInt(modal.querySelector('#lote-new-pos').value);
+    if (!newPosId) { toast('Seleccioná una ubicación', 'error'); return; }
+    const notas = modal.querySelector('.note-chip.active')?.dataset.note || '';
+    const btn = modal.querySelector('#lote-confirm');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loader"></span>';
+    try {
+      for (const caja of lote) {
+        await API.createMovimiento({
+          tipo: 'trasladar_caja', caja_id: caja.id,
+          posicion_origen_id: caja.posicion?.id,
+          posicion_destino_id: newPosId,
+          usuario_id: State.user.id, notas
+        });
+      }
+      toast(`${lote.length} caja${lote.length !== 1 ? 's' : ''} movida${lote.length !== 1 ? 's' : ''} ✓`, 'success');
+      State.cache.loteBoxes = [];
+      State.modal = null;
+      State.view = 'scan';
+      render();
+    } catch (e) {
+      toast('Error: ' + e.message, 'error');
+      btn.disabled = false;
+      btn.textContent = `Mover ${lote.length} cajas`;
+    }
+  };
+  return modal;
+}
+
+// =====================================================================
 // IMPRIMIR QR
 // =====================================================================
 export function renderPrintQRModal() {

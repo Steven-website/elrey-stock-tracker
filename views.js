@@ -152,13 +152,14 @@ export function renderShell() {
   const canPrint = ['operario', 'contador'].includes(State.user?.rol);
 
   const main = $(`<main></main>`);
-  if (!adminOnly && State.view === 'scan')       main.appendChild(renderScanView());
-  else if (!adminOnly && State.view === 'buscar')main.appendChild(renderBuscarView());
-  else if (!adminOnly && State.view === 'cajas') main.appendChild(renderCajasView());
-  else if (!adminOnly && State.view === 'perfil')main.appendChild(renderPerfilView());
+  if (!adminOnly && State.view === 'scan')             main.appendChild(renderScanView());
+  else if (!adminOnly && State.view === 'mover-lote')  main.appendChild(renderMoverLoteView());
+  else if (!adminOnly && State.view === 'buscar')      main.appendChild(renderBuscarView());
+  else if (!adminOnly && State.view === 'cajas')       main.appendChild(renderCajasView());
+  else if (!adminOnly && State.view === 'perfil')      main.appendChild(renderPerfilView());
   else if (!adminOnly && State.view === 'imprimir' && canPrint) main.appendChild(renderImprimirView());
-  else if (State.view === 'mov')                 main.appendChild(renderMovView());
-  else if (State.view === 'mas')                 main.appendChild(renderMasView());
+  else if (State.view === 'mov')                       main.appendChild(renderMovView());
+  else if (State.view === 'mas')                       main.appendChild(renderMasView());
   wrap.appendChild(main);
 
   const pending = getPendingCount();
@@ -258,9 +259,12 @@ export function renderScanView() {
       <button class="btn" id="btn-manual">${ICON.check}</button>
     </div>
 
-    <div class="section" style="padding-top:0; padding-bottom:0;">
+    <div class="section" style="padding-top:0; padding-bottom:0; display:flex; flex-direction:column; gap:8px;">
       <button class="btn btn-block" id="btn-create-from-scan">
         ${ICON.add} Crear caja nueva
+      </button>
+      <button class="btn btn-block" id="btn-mover-lote-enter" style="border-color:var(--accent); color:var(--accent);">
+        ${ICON.move} Mover cajas en lote
       </button>
     </div>
 
@@ -292,6 +296,13 @@ export function renderScanView() {
     if (scannerActive()) stopScanner();
     State.cache.newBox = null;
     State.modal = 'create';
+    render();
+  };
+
+  wrap.querySelector('#btn-mover-lote-enter').onclick = () => {
+    if (scannerActive()) stopScanner();
+    State.cache.loteBoxes = [];
+    State.view = 'mover-lote';
     render();
   };
 
@@ -806,6 +817,135 @@ function renderAlertasSection(wrap, tiendaId = null) {
     const list = wrap.querySelector('#alerta-list');
     if (list) list.innerHTML = `<div class="empty" style="padding:10px 0;"><p>Error al cargar alertas</p></div>`;
   });
+}
+
+// =====================================================================
+// MOVER LOTE — escaneo acumulativo de cajas para traslado masivo
+// =====================================================================
+function renderMoverLoteView() {
+  if (!State.cache.loteBoxes) State.cache.loteBoxes = [];
+
+  const wrap = $(`<div></div>`);
+
+  const refreshList = () => {
+    const lote = State.cache.loteBoxes;
+    const listEl = wrap.querySelector('#lote-list');
+    const barEl  = wrap.querySelector('#lote-bar');
+    const cntEl  = wrap.querySelector('#lote-count');
+    const barCnt = wrap.querySelector('#lote-bar-count');
+
+    if (cntEl)  cntEl.textContent  = lote.length;
+    if (barCnt) barCnt.textContent = lote.length;
+    if (barEl)  barEl.style.display = lote.length > 0 ? 'flex' : 'none';
+
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    if (!lote.length) {
+      listEl.innerHTML = `<div class="empty" style="padding:20px 0;"><p>Escaneá cajas para agregarlas</p></div>`;
+      return;
+    }
+    lote.forEach(c => {
+      const row = $(`
+        <div class="lote-item">
+          <div class="lote-item-info">
+            <div class="mono" style="font-size:12px; color:var(--accent);">${escapeHtml(c.codigo_caja)}</div>
+            <div class="meta">${escapeHtml(c.posicion?.ubicacion || 'Sin ubicar')}${c.posicion?.descripcion ? ' · ' + escapeHtml(c.posicion.descripcion) : ''}</div>
+          </div>
+          <button class="btn btn-sm" data-code="${escapeHtml(c.codigo_caja)}" style="color:var(--danger); border-color:var(--danger);">✕</button>
+        </div>
+      `);
+      row.querySelector('button').onclick = () => {
+        State.cache.loteBoxes = State.cache.loteBoxes.filter(b => b.codigo_caja !== c.codigo_caja);
+        refreshList();
+      };
+      listEl.appendChild(row);
+    });
+  };
+
+  const handleScan = async (code) => {
+    const cleaned = (code || '').trim();
+    if (!cleaned) return;
+    const existing = State.cache.loteBoxes.find(b => b.codigo_caja === cleaned);
+    if (existing) {
+      State.cache.loteBoxes = State.cache.loteBoxes.filter(b => b.codigo_caja !== cleaned);
+      feedback('ok');
+      toast(`${cleaned} quitada`, 'warn');
+      refreshList();
+      return;
+    }
+    try {
+      const caja = await API.getCajaByCode(cleaned);
+      if (!caja) { feedback('error'); toast(`Código no encontrado: ${cleaned}`, 'error'); return; }
+      State.cache.loteBoxes.push(caja);
+      feedback('ok');
+      toast(`${cleaned} agregada ✓`, 'success');
+      refreshList();
+    } catch (e) { feedback('error'); toast('Error: ' + e.message, 'error'); }
+  };
+
+  wrap.innerHTML = `
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 16px 8px;">
+      <div style="font-weight:700; font-size:15px;">Mover cajas en lote</div>
+      <button class="btn btn-sm" id="btn-lote-exit">✕ Salir</button>
+    </div>
+
+    <div class="scan-hero" style="min-height:160px;">
+      <div class="scan-hero-inner">
+        <div class="scan-idle">
+          ${ICON.scan}
+          <div>
+            <h3 style="font-size:15px; margin-bottom:4px;">Escaneá una caja</h3>
+            <p>Se va acumulando la lista abajo</p>
+          </div>
+          <button class="btn btn-primary" id="btn-lote-cam">Iniciar cámara</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="scan-input-row">
+      <input type="text" class="input mono" id="lote-manual" placeholder="O ingresá el código…" autocomplete="off" />
+      <button class="btn" id="btn-lote-ok">${ICON.check}</button>
+    </div>
+
+    <div class="section" style="padding-bottom:88px;">
+      <div class="section-title">
+        Cajas en lista &nbsp;<span id="lote-count" style="color:var(--accent); font-weight:700;">0</span>
+      </div>
+      <div id="lote-list"></div>
+    </div>
+
+    <div class="lote-bar" id="lote-bar" style="display:none;">
+      <span style="font-size:14px; font-weight:600;"><span id="lote-bar-count">0</span> cajas seleccionadas</span>
+      <button class="btn btn-primary" id="btn-lote-mover">Cambiar ubicación →</button>
+    </div>
+  `;
+
+  const inp = wrap.querySelector('#lote-manual');
+  const submit = () => { const v = inp.value.trim(); if (v) { handleScan(v); inp.value = ''; } };
+  wrap.querySelector('#btn-lote-ok').onclick = submit;
+  inp.onkeydown = e => { if (e.key === 'Enter') submit(); };
+
+  wrap.querySelector('#btn-lote-cam').onclick = () => {
+    const hero = wrap.querySelector('.scan-hero-inner');
+    if (hero) hero.innerHTML = `<div id="lote-qr-reader"></div><div class="scan-overlay"><div class="scan-frame"><span></span><span></span><div class="scan-line"></div></div></div>`;
+    startScanner('lote-qr-reader', handleScan);
+  };
+
+  wrap.querySelector('#btn-lote-exit').onclick = () => {
+    if (scannerActive()) stopScanner();
+    State.cache.loteBoxes = [];
+    State.view = 'scan';
+    render();
+  };
+
+  wrap.querySelector('#btn-lote-mover').onclick = () => {
+    if (scannerActive()) stopScanner();
+    State.modal = 'moverLote';
+    render();
+  };
+
+  refreshList();
+  return wrap;
 }
 
 function renderAdminMasView() {
