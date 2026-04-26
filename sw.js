@@ -4,7 +4,7 @@
 //             network-only para llamadas a Supabase
 // =====================================================================
 
-const CACHE = 'elrey-v12';
+const CACHE = 'elrey-v13';
 
 const SHELL = [
   './',
@@ -21,6 +21,7 @@ const SHELL = [
   './views.js',
   './queue.js',
   './audit.js',
+  './qrcode.min.js',
 ];
 
 self.addEventListener('install', e => {

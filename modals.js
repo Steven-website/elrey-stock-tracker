@@ -740,7 +740,7 @@ export function renderPrintQRModal() {
       ${ICON.info}<span>Caja creada · imprimí este QR y pegalo en la caja física</span>
     </div>
     <div style="background:#fff; padding:24px; display:flex; flex-direction:column; align-items:center; gap:12px; border:1px solid var(--border);">
-      <canvas id="qr-canvas" style="max-width:100%;"></canvas>
+      <div id="qr-canvas" style="width:280px; height:280px;"></div>
       <div style="font-family:var(--font-mono); font-size:14px; font-weight:600; color:#000; text-align:center; letter-spacing:-0.01em;">
         ${escapeHtml(code)}
       </div>
@@ -760,15 +760,17 @@ export function renderPrintQRModal() {
   const modal = modalShell('QR de la caja', bodyHtml, footerHtml);
 
   setTimeout(() => {
-    const canvas = modal.querySelector('#qr-canvas');
-    if (canvas && window.QRCode) {
-      window.QRCode.toCanvas(canvas, code, {
-        width: 280, margin: 2,
-        color: { dark: '#000000', light: '#ffffff' },
-        errorCorrectionLevel: 'M'
-      }, () => {});
+    const el = modal.querySelector('#qr-canvas');
+    if (el && window.QRCode) {
+      el.innerHTML = '';
+      new window.QRCode(el, {
+        text: code,
+        width: 280, height: 280,
+        colorDark: '#000000', colorLight: '#ffffff',
+        correctLevel: window.QRCode.CorrectLevel.M
+      });
     }
-  }, 50);
+  }, 80);
 
   modal.querySelector('#copy-code').onclick = () => {
     navigator.clipboard?.writeText(code).then(
