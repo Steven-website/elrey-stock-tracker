@@ -149,13 +149,16 @@ export function renderShell() {
     State.view = 'mas';
   }
 
+  const canPrint = ['operario', 'contador'].includes(State.user?.rol);
+
   const main = $(`<main></main>`);
-  if (!adminOnly && State.view === 'scan')        main.appendChild(renderScanView());
-  else if (!adminOnly && State.view === 'buscar') main.appendChild(renderBuscarView());
-  else if (!adminOnly && State.view === 'cajas')  main.appendChild(renderCajasView());
-  else if (!adminOnly && State.view === 'perfil') main.appendChild(renderPerfilView());
-  else if (State.view === 'mov')                  main.appendChild(renderMovView());
-  else if (State.view === 'mas')                  main.appendChild(renderMasView());
+  if (!adminOnly && State.view === 'scan')       main.appendChild(renderScanView());
+  else if (!adminOnly && State.view === 'buscar')main.appendChild(renderBuscarView());
+  else if (!adminOnly && State.view === 'cajas') main.appendChild(renderCajasView());
+  else if (!adminOnly && State.view === 'perfil')main.appendChild(renderPerfilView());
+  else if (!adminOnly && State.view === 'imprimir' && canPrint) main.appendChild(renderImprimirView());
+  else if (State.view === 'mov')                 main.appendChild(renderMovView());
+  else if (State.view === 'mas')                 main.appendChild(renderMasView());
   wrap.appendChild(main);
 
   const pending = getPendingCount();
@@ -169,11 +172,12 @@ export function renderShell() {
     `)
     : $(`
       <nav class="tabs">
-        <button data-v="scan"   class="${State.view==='scan'  ?'active':''}">${ICON.scan}<span>Escanear</span></button>
-        <button data-v="buscar" class="${State.view==='buscar' ?'active':''}">${ICON.search}<span>Buscar</span></button>
-        <button data-v="cajas"  class="${State.view==='cajas'  ?'active':''}">${ICON.box}<span>Cajas</span></button>
-        <button data-v="mov"    class="${State.view==='mov'    ?'active':''}">${ICON.list}<span>Mov.</span>${pending > 0 ? `<span class="nav-badge">${pending}</span>` : ''}</button>
-        <button data-v="perfil" class="${State.view==='perfil' ?'active':''}">${ICON.user}<span>Perfil</span></button>
+        <button data-v="scan"   class="${State.view==='scan'     ?'active':''}">${ICON.scan}<span>Escanear</span></button>
+        <button data-v="buscar" class="${State.view==='buscar'   ?'active':''}">${ICON.search}<span>Buscar</span></button>
+        <button data-v="cajas"  class="${State.view==='cajas'    ?'active':''}">${ICON.box}<span>Cajas</span></button>
+        <button data-v="mov"    class="${State.view==='mov'      ?'active':''}">${ICON.list}<span>Mov.</span>${pending > 0 ? `<span class="nav-badge">${pending}</span>` : ''}</button>
+        ${canPrint ? `<button data-v="imprimir" class="${State.view==='imprimir'?'active':''}">${ICON.qr}<span>Imprimir</span></button>` : ''}
+        <button data-v="perfil" class="${State.view==='perfil'   ?'active':''}">${ICON.user}<span>Perfil</span></button>
         <button class="nav-logout" id="nav-logout-btn">${ICON.logout}<span>Cerrar sesión</span></button>
       </nav>
     `);
@@ -617,6 +621,86 @@ export function renderMasView() {
   return renderUserMasView();
 }
 
+// =====================================================================
+// IMPRIMIR QR — buscar caja y mostrar QR para imprimir
+// =====================================================================
+function renderImprimirView() {
+  if (!State.cache.imprimirQuery) State.cache.imprimirQuery = '';
+  const wrap = $(`<div class="imprimir-wrap"></div>`);
+
+  wrap.innerHTML = `
+    <div class="imprimir-header">
+      <div class="imprimir-title">${ICON.qr} Imprimir QR de caja</div>
+      <div class="imprimir-sub">Buscá por código o ubicación, o elegí una reciente</div>
+    </div>
+    <div class="imprimir-search-row">
+      <input class="input mono" id="imp-search" placeholder="Código o ubicación…" value="${escapeHtml(State.cache.imprimirQuery)}" autocomplete="off" />
+    </div>
+    <div id="imp-list" class="imprimir-list">
+      <div class="empty"><div class="loader"></div></div>
+    </div>
+  `;
+
+  let allCajas = [];
+
+  function renderList(query) {
+    const q = (query || '').toLowerCase().trim();
+    const filtered = q
+      ? allCajas.filter(c =>
+          c.codigo_caja.toLowerCase().includes(q) ||
+          (c.posicion?.descripcion || '').toLowerCase().includes(q) ||
+          (c.posicion?.ubicacion || '').toLowerCase().includes(q)
+        )
+      : allCajas.slice(0, 10);
+
+    const list = wrap.querySelector('#imp-list');
+    list.innerHTML = '';
+
+    if (!filtered.length) {
+      list.innerHTML = `<div class="empty">${ICON.empty}<p>${q ? 'Sin resultados para "' + escapeHtml(q) + '"' : 'No hay cajas activas'}</p></div>`;
+      return;
+    }
+
+    const label = q ? `${filtered.length} resultado${filtered.length !== 1 ? 's' : ''}` : 'Recientes';
+    list.innerHTML = `<div class="imprimir-section-lbl">${label}</div>`;
+
+    filtered.forEach(c => {
+      const units = c.unidades_totales ?? 0;
+      const pos = c.posicion ? `${c.posicion.ubicacion || ''} · ${c.posicion.descripcion || ''}` : '—';
+      const item = $(`
+        <div class="imprimir-item">
+          <div class="imprimir-item-info">
+            <div class="imprimir-item-code mono">${escapeHtml(c.codigo_caja)}</div>
+            <div class="imprimir-item-meta">${escapeHtml(pos)} · <strong>${units}</strong> u.</div>
+          </div>
+          <button class="imprimir-qr-btn" title="Ver QR">${ICON.qr}</button>
+        </div>
+      `);
+      item.querySelector('.imprimir-qr-btn').onclick = () => {
+        State.cache.printCode = c.codigo_caja;
+        State.modal = 'print';
+        render();
+      };
+      list.appendChild(item);
+    });
+  }
+
+  API.listCajas(false).then(cajas => {
+    allCajas = cajas.sort((a, b) => new Date(b.fecha_creacion) - new Date(a.fecha_creacion));
+    renderList(State.cache.imprimirQuery);
+  }).catch(() => {
+    wrap.querySelector('#imp-list').innerHTML = `<div class="empty"><p>Error al cargar cajas</p></div>`;
+  });
+
+  const searchEl = wrap.querySelector('#imp-search');
+  searchEl.oninput = () => {
+    State.cache.imprimirQuery = searchEl.value;
+    renderList(searchEl.value);
+  };
+
+  return wrap;
+}
+
 function renderPerfilView() {
   const u    = State.user;
   const demo = !State.config.url || !State.config.anonKey;
@@ -653,12 +737,6 @@ function renderPerfilView() {
       </div>
     </div>
 
-    <div class="perfil-qr-wrap">
-      <div class="perfil-qr-lbl">Mi código QR</div>
-      <canvas id="perfil-qr-canvas"></canvas>
-      <div class="perfil-qr-sub mono">${escapeHtml(u.username)}</div>
-    </div>
-
     <div class="perfil-actions">
       <button class="perfil-action-btn" id="btn-cfg-pwd">
         ${ICON.lock}
@@ -676,17 +754,6 @@ function renderPerfilView() {
   `;
 
   wrap.querySelector('#btn-cfg-pwd').onclick = () => { State.modal = 'cambiar-password'; render(); };
-
-  // Generar QR del usuario
-  setTimeout(() => {
-    const canvas = wrap.querySelector('#perfil-qr-canvas');
-    if (canvas && window.QRCode) {
-      QRCode.toCanvas(canvas, u.username, {
-        width: 180, margin: 2,
-        color: { dark: '#1e293b', light: '#ffffff' }
-      });
-    }
-  }, 50);
 
   // Resolver nombre de tienda async
   API.listTiendas().then(tiendas => {

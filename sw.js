@@ -4,7 +4,7 @@
 //             network-only para llamadas a Supabase
 // =====================================================================
 
-const CACHE = 'elrey-v11';
+const CACHE = 'elrey-v12';
 
 const SHELL = [
   './',
