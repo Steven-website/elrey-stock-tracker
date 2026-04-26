@@ -764,13 +764,6 @@ function renderAdminMasView() {
             <div class="dash-card-title">${ICON.settings} Herramientas</div>
           </div>
           <div style="padding:12px;">
-            <button class="dash-action" id="mod-articulos">
-              <div class="dash-action-icon">${ICON.package}</div>
-              <div>
-                <div class="dash-action-label">Artículos</div>
-                <div class="dash-action-sub">Catálogo de productos</div>
-              </div>
-            </button>
             <button class="dash-action" id="mod-tiendas">
               <div class="dash-action-icon">${ICON.pin}</div>
               <div>
@@ -884,7 +877,6 @@ function renderAdminMasView() {
       `<div class="empty"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
   });
 
-  wrap.querySelector('#mod-articulos').onclick  = () => { State.modal = 'articulos';  render(); };
   wrap.querySelector('#mod-tiendas').onclick     = () => { State.modal = 'tiendas';    render(); };
   wrap.querySelector('#mod-audit').onclick       = () => { State.modal = 'audit';      render(); };
   wrap.querySelector('#btn-new-user').onclick    = () => { State.cache.editingUser = null; State.modal = 'createUser'; render(); };
