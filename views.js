@@ -460,13 +460,15 @@ function exportToExcel(movs) {
 // MOVIMIENTOS VIEW
 // =====================================================================
 export function renderMovView() {
-  if (!State.cache.movFilter) State.cache.movFilter = 'all';
+  const soloMios = State.user?.rol === 'operario';
+  if (!soloMios && !State.cache.movFilter) State.cache.movFilter = 'all';
   const hoy = new Date().toDateString();
   const wrap = $(`<div></div>`);
 
   wrap.innerHTML = `
     <div class="section" style="padding-bottom:8px;">
       <div style="display:flex; align-items:center; gap:6px;">
+        ${soloMios ? '' : `
         <div class="mov-filter-bar" style="flex:1;">
           <button class="mov-filter-btn ${State.cache.movFilter === 'all' ? 'active' : ''}" data-f="all">
             ${ICON.list} Todos
@@ -475,6 +477,7 @@ export function renderMovView() {
             ${ICON.user} Mis movimientos hoy
           </button>
         </div>
+        `}
         ${canExport() ? `
           <button class="btn btn-excel" id="btn-export" title="Exportar a Excel" disabled>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h2.5M13.5 13H16M8 17h2.5M13.5 17H16M10.5 13v4"/></svg>
@@ -485,7 +488,7 @@ export function renderMovView() {
     </div>
     <div class="section" style="padding-top:0;">
       <div class="section-title" style="display:flex; justify-content:space-between; align-items:center;">
-        <span id="mov-title">Cargando…</span>
+        <span id="mov-title">${soloMios ? 'Mis movimientos' : 'Cargando…'}</span>
         <small id="mov-count" style="font-weight:400; color:var(--muted); font-size:10px;"></small>
       </div>
       <div id="mov-summary" style="display:none; margin-bottom:10px;"></div>
@@ -499,19 +502,20 @@ export function renderMovView() {
   let currentFiltered = [];
 
   function applyFilter() {
-    const f = State.cache.movFilter;
+    const f = soloMios ? 'mine' : State.cache.movFilter;
     const filtered = f === 'mine'
       ? allMovs.filter(m =>
-          new Date(m.creado_at).toDateString() === hoy &&
+          (soloMios || new Date(m.creado_at).toDateString() === hoy) &&
           (m.usuario_id === State.user.id || m.usuario?.username === State.user.username)
         )
       : allMovs;
 
-    wrap.querySelector('#mov-title').textContent =
-      f === 'mine' ? 'Mis movimientos de hoy' : 'Últimos movimientos';
+    if (!soloMios) {
+      wrap.querySelector('#mov-title').textContent =
+        f === 'mine' ? 'Mis movimientos de hoy' : 'Últimos movimientos';
+    }
     wrap.querySelector('#mov-count').textContent = `${filtered.length} eventos`;
 
-    // Resumen rápido para "mis movimientos hoy"
     const summary = wrap.querySelector('#mov-summary');
     if (f === 'mine' && filtered.length > 0) {
       const salidas  = filtered.filter(m => m.tipo === 'reducir').reduce((s, m) => s + (m.cantidad || 0), 0);
@@ -536,17 +540,14 @@ export function renderMovView() {
     const list = wrap.querySelector('#mov-list');
     list.innerHTML = '';
     if (!filtered.length) {
-      const msg = f === 'mine' ? 'No registraste movimientos hoy' : 'Todavía no hay actividad';
-      list.innerHTML = `<div class="empty">${ICON.empty}<h3>Sin movimientos</h3><p>${msg}</p></div>`;
+      list.innerHTML = `<div class="empty">${ICON.empty}<h3>Sin movimientos</h3><p>No tenés movimientos registrados</p></div>`;
       return;
     }
     filtered.forEach(m => list.appendChild(movListItem(m)));
   }
 
   const btnExport = wrap.querySelector('#btn-export');
-  if (btnExport) {
-    btnExport.onclick = () => exportToExcel(currentFiltered);
-  }
+  if (btnExport) btnExport.onclick = () => exportToExcel(currentFiltered);
 
   wrap.querySelectorAll('.mov-filter-btn').forEach(btn => {
     btn.onclick = () => {
