@@ -427,6 +427,17 @@ export const API = {
     return data;
   },
 
+  async updateTienda(id, fields) {
+    if (isDemoMode()) {
+      const t = MOCK.tiendas.find(x => x.id === id);
+      if (t) Object.assign(t, fields);
+      return t;
+    }
+    const { data, error } = await sb.from('tiendas').update(fields).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+  },
+
   // -------------------- ARTÍCULOS (CRUD admin) --------------------
   async createArticulo({ codigo_barras, sku, descripcion, familia, unidades_por_caja }) {
     if (isDemoMode()) {

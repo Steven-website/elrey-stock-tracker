@@ -829,39 +829,65 @@ function _apUsuarios(el) {
   });
 }
 
-// ── Tab: Tiendas ──────────────────────────────────────────────────────
+// ── Tab: Tiendas (solo lectura + activar/desactivar — vienen del ERP) ──
 function _apTiendas(el) {
-  el.innerHTML = `
-    <div style="padding:12px;">
-      <div class="dash-card">
-        <div class="dash-card-header">
-          <div class="dash-card-title">${ICON.pin} Tiendas / Sucursales</div>
-          <button class="btn btn-sm btn-primary" id="btn-ver-tiendas">${ICON.more} Ver detalle</button>
-        </div>
-        <div id="tiendas-list-inline" style="padding:8px 16px 14px;">
-          <div class="empty"><div class="loader"></div></div>
+  const load = () => {
+    el.innerHTML = `
+      <div style="padding:12px;">
+        <div class="dash-card">
+          <div class="dash-card-header">
+            <div class="dash-card-title">${ICON.pin} Tiendas / Sucursales</div>
+            <span style="font-size:11px;color:var(--muted);">Cargadas desde ERP</span>
+          </div>
+          <div id="tiendas-list-inline" style="padding:8px 16px 14px;">
+            <div class="empty"><div class="loader"></div></div>
+          </div>
         </div>
       </div>
-    </div>
-  `;
-  el.querySelector('#btn-ver-tiendas').onclick = () => { State.modal = 'tiendas'; render(); };
-  API.listTiendas().then(tiendas => {
-    const cont = el.querySelector('#tiendas-list-inline');
-    if (!tiendas.length) { cont.innerHTML = `<div class="empty"><p>Sin tiendas registradas</p></div>`; return; }
-    cont.innerHTML = '';
-    tiendas.forEach(t => cont.appendChild($(`
-      <div class="user-item">
-        <div class="user-info">
-          <div class="user-name">${escapeHtml(t.nombre)}</div>
-          <div class="user-meta">${escapeHtml(t.descripcion || '—')}</div>
-        </div>
-        <span class="pill pill-${t.activa ? 'success' : 'muted'}">${t.activa ? 'Activa' : 'Inactiva'}</span>
-      </div>
-    `)));
-  }).catch(e => {
-    el.querySelector('#tiendas-list-inline').innerHTML =
-      `<div class="empty"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
-  });
+    `;
+
+    Promise.all([API.listTiendas(), API.listCajas(false), API.listUsers(true)])
+      .then(([tiendas, cajas, usuarios]) => {
+        const cont = el.querySelector('#tiendas-list-inline');
+        if (!tiendas.length) { cont.innerHTML = `<div class="empty"><p>Sin tiendas cargadas</p></div>`; return; }
+        cont.innerHTML = '';
+        tiendas.forEach(t => {
+          const cajasT   = cajas.filter(c => c.tienda_id === t.id);
+          const unidades = cajasT.reduce((s, c) => s + (c.unidades_totales || 0), 0);
+          const usrs     = usuarios.filter(u => u.tienda_id === t.id);
+          const row = $(`
+            <div class="tienda-row">
+              <div class="tienda-row-info">
+                <div class="tienda-row-name">${escapeHtml(t.nombre)}</div>
+                <div class="tienda-row-meta">
+                  <span class="mono">${escapeHtml(t.codigo || '')}</span>
+                  &nbsp;·&nbsp; ${cajasT.length} cajas &nbsp;·&nbsp; ${unidades} uds &nbsp;·&nbsp; ${usrs.length} usuarios
+                </div>
+              </div>
+              <button class="btn btn-sm ${t.activa ? 'btn-danger-ghost' : 'btn-success-ghost'} tienda-toggle"
+                data-id="${t.id}" data-activa="${t.activa}">
+                ${t.activa ? 'Desactivar' : 'Activar'}
+              </button>
+            </div>
+          `);
+          row.querySelector('.tienda-toggle').onclick = async btn => {
+            const activa = btn.currentTarget.dataset.activa === 'true';
+            const accion = activa ? 'desactivar' : 'activar';
+            if (!confirm(`¿${accion.charAt(0).toUpperCase()+accion.slice(1)} la tienda "${t.nombre}"?`)) return;
+            try {
+              await API.updateTienda(t.id, { activa: !activa });
+              toast(`Tienda ${!activa ? 'activada' : 'desactivada'}`, 'success');
+              load();
+            } catch(e) { toast('Error: ' + e.message, 'error'); }
+          };
+          cont.appendChild(row);
+        });
+      }).catch(e => {
+        el.querySelector('#tiendas-list-inline').innerHTML =
+          `<div class="empty"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
+      });
+  };
+  load();
 }
 
 // ── Tab: Configuración ────────────────────────────────────────────────

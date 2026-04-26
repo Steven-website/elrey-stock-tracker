@@ -1173,6 +1173,48 @@ main {
   font-size: 12px;
 }
 
+/* ---- Tienda rows (tab Tiendas del Master) ------------------------------ */
+.tienda-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.tienda-row:last-child { border-bottom: none; }
+
+.tienda-row-info { flex: 1; min-width: 0; }
+.tienda-row-name { font-size: 14px; font-weight: 600; color: var(--text); }
+.tienda-row-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+.btn-danger-ghost {
+  background: #fee2e2;
+  color: var(--danger);
+  border: 1px solid #fca5a5;
+  border-radius: var(--radius);
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.btn-danger-ghost:hover { background: #fecaca; }
+
+.btn-success-ghost {
+  background: #dcfce7;
+  color: var(--success);
+  border: 1px solid #86efac;
+  border-radius: var(--radius);
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.btn-success-ghost:hover { background: #bbf7d0; }
+
+:root[data-theme="dark"] .btn-danger-ghost  { background: #3b0a0a; border-color: #7f1d1d; }
+:root[data-theme="dark"] .btn-success-ghost { background: #052e16; border-color: #166534; }
+
 /* ---- Admin panel with internal tabs ----------------------------------- */
 .admin-panel {
   display: flex;
