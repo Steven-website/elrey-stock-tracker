@@ -141,6 +141,20 @@ export function renderShell() {
       render();
     };
   });
+
+  // Badge de alertas stock en pestaña Más (async, no bloquea render)
+  API.getLowStockAlerts(State.config.stockMinimo ?? 10).then(alerts => {
+    if (alerts.length > 0) {
+      const masBtn = nav.querySelector('[data-v="mas"]');
+      if (masBtn && !masBtn.querySelector('.nav-badge-warn')) {
+        const b = document.createElement('span');
+        b.className = 'nav-badge nav-badge-warn';
+        b.textContent = alerts.length;
+        masBtn.appendChild(b);
+      }
+    }
+  }).catch(() => {});
+
   wrap.appendChild(nav);
 
   return wrap;
@@ -613,6 +627,49 @@ function renderUserMasView() {
   return wrap;
 }
 
+// Carga y pinta alertas de stock bajo en el #alerta-list del wrap
+function renderAlertasSection(wrap, tiendaId = null) {
+  const threshold = State.config.stockMinimo ?? 10;
+  API.getLowStockAlerts(threshold, tiendaId).then(alerts => {
+    const list = wrap.querySelector('#alerta-list');
+    if (!list) return;
+    const badge = wrap.querySelector('#alerta-count');
+    if (badge) {
+      badge.textContent = alerts.length ? `${alerts.length} artículo${alerts.length > 1 ? 's' : ''}` : '';
+      badge.style.display = alerts.length ? '' : 'none';
+    }
+    list.innerHTML = '';
+    if (!alerts.length) {
+      list.innerHTML = `<div style="padding:12px 0; text-align:center; color:var(--success); font-size:13px; display:flex; align-items:center; justify-content:center; gap:6px;">${ICON.check} Sin artículos bajo el umbral de ${threshold} unidades</div>`;
+      return;
+    }
+    alerts.forEach(a => {
+      const pct = threshold > 0 ? Math.min(100, (a.stock_total / threshold) * 100) : 0;
+      const color = a.stock_total === 0 ? 'var(--danger)'
+                  : a.stock_total < Math.ceil(threshold / 2) ? '#f59e0b'
+                  : 'var(--accent)';
+      list.appendChild($(`
+        <div class="alerta-item">
+          <div class="alerta-meta">
+            <span class="alerta-nombre">${escapeHtml(a.descripcion || a.sku || '')}</span>
+            <span class="alerta-sku">${escapeHtml(a.sku || '')}</span>
+          </div>
+          <div class="alerta-right">
+            <span class="alerta-qty" style="color:${color};">${a.stock_total}</span>
+            <span class="alerta-umbral">/ ${threshold}</span>
+          </div>
+          <div class="alerta-bar-wrap">
+            <div class="alerta-bar" style="width:${pct.toFixed(1)}%; background:${color};"></div>
+          </div>
+        </div>
+      `));
+    });
+  }).catch(() => {
+    const list = wrap.querySelector('#alerta-list');
+    if (list) list.innerHTML = `<div class="empty" style="padding:10px 0;"><p>Error al cargar alertas</p></div>`;
+  });
+}
+
 function renderAdminMasView() {
   const wrap = $(`<div></div>`);
   const demo = !State.config.url || !State.config.anonKey;
@@ -632,6 +689,16 @@ function renderAdminMasView() {
         <div class="kpi-card" style="grid-column:1/-1; justify-content:center;">
           <div class="loader"></div>
         </div>
+      </div>
+    </div>
+
+    <div class="section" style="padding-top:0;">
+      <div class="section-title" style="display:flex; align-items:center; gap:6px;">
+        ${ICON.warn} Alertas de stock bajo
+        <span id="alerta-count" class="pill pill-danger" style="display:none; margin-left:4px;"></span>
+      </div>
+      <div id="alerta-list" class="stack">
+        <div class="empty"><div class="loader"></div></div>
       </div>
     </div>
 
@@ -685,6 +752,15 @@ function renderAdminMasView() {
           ${[5, 10, 30].map(m => `<option value="${m}" ${(State.config.inactivityMinutes??10)===m?'selected':''}>${m} min</option>`).join('')}
           <option value="0" ${(State.config.inactivityMinutes??10)===0?'selected':''}>Nunca</option>
         </select>
+      </div>
+      <div class="setting-row" style="margin-bottom:4px;">
+        ${ICON.warn}
+        <div class="grow">
+          <div style="font-weight:500;">Umbral stock bajo</div>
+          <div class="meta" style="font-size:11px;">Alerta si el total de un artículo es menor a X unidades</div>
+        </div>
+        <input id="stock-min-input" type="number" min="0" max="9999" value="${State.config.stockMinimo ?? 10}"
+          style="width:60px; background:var(--surface-2); border:1px solid var(--border); color:var(--text); padding:4px 6px; border-radius:6px; font-size:13px; font-family:var(--font-mono); text-align:center;">
       </div>
       <button class="btn btn-danger btn-block" id="btn-logout" style="margin-top:8px;">
         ${ICON.logout} Cerrar sesión
@@ -764,6 +840,16 @@ function renderAdminMasView() {
     toast(minutes === 0 ? 'Cierre por inactividad desactivado' : `Cierre por inactividad: ${minutes} min`, 'success');
   };
 
+  wrap.querySelector('#stock-min-input').oninput = e => {
+    const v = parseInt(e.target.value);
+    if (isNaN(v) || v < 0) return;
+    State.config.stockMinimo = v;
+    Storage.set('config', State.config);
+    renderAlertasSection(wrap);
+  };
+
+  renderAlertasSection(wrap);
+
   return wrap;
 }
 
@@ -789,6 +875,16 @@ function renderAdminTiendaMasView() {
         <div class="kpi-card" style="grid-column:1/-1; text-align:center;">
           <div class="loader"></div>
         </div>
+      </div>
+    </div>
+
+    <div class="section" style="padding-top:0;">
+      <div class="section-title" style="display:flex; align-items:center; gap:6px;">
+        ${ICON.warn} Alertas de stock bajo
+        <span id="alerta-count" class="pill pill-danger" style="display:none; margin-left:4px;"></span>
+      </div>
+      <div id="alerta-list" class="stack">
+        <div class="empty"><div class="loader"></div></div>
       </div>
     </div>
 
@@ -894,6 +990,8 @@ function renderAdminTiendaMasView() {
     if (!confirm('¿Cerrar sesión?')) return;
     logout(); render();
   };
+
+  renderAlertasSection(wrap, myTiendaId);
 
   return wrap;
 }

@@ -446,6 +446,25 @@ export const API = {
     return data;
   },
 
+  // -------------------- ALERTAS DE STOCK --------------------
+  async getLowStockAlerts(threshold = 10, tiendaId = null) {
+    const [cajas, arts] = await Promise.all([this.listCajas(false), this.listArticulos()]);
+    const filtered = tiendaId
+      ? cajas.filter(c => c.tienda_id === tiendaId || c.posicion?.tienda_id === tiendaId)
+      : cajas;
+    const stock = {};
+    for (const c of filtered) {
+      for (const item of (c.contenido || [])) {
+        stock[item.articulo_id] = (stock[item.articulo_id] || 0) + item.cantidad_actual;
+      }
+    }
+    return arts
+      .filter(a => a.activo !== false)
+      .map(a => ({ ...a, stock_total: stock[a.id] || 0 }))
+      .filter(a => a.stock_total < threshold)
+      .sort((a, b) => a.stock_total - b.stock_total);
+  },
+
   async updateArticulo(id, changes) {
     if (isDemoMode()) {
       const a = MOCK.articulos.find(x => x.id === id);
