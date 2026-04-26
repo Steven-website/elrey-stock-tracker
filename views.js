@@ -1058,6 +1058,18 @@ function _apConfig(el, demo) {
           <button class="btn btn-block" id="cfg-supabase">${ICON.settings} Configurar conexión</button>
         </div>
       </div>
+      <div class="dash-card">
+        <div class="dash-card-header">
+          <div class="dash-card-title">${ICON.user} Sesión activa</div>
+        </div>
+        <div style="padding:12px 16px;">
+          <div style="font-size:13px;color:var(--muted);margin-bottom:12px;">
+            Ingresado como <strong style="color:var(--text);">${escapeHtml(State.user.nombre || State.user.username)}</strong>
+            &nbsp;·&nbsp; <span class="pill pill-info" style="font-size:10px;">${escapeHtml(State.user.rol)}</span>
+          </div>
+          <button class="btn btn-danger btn-block" id="btn-logout-config">${ICON.logout} Cerrar sesión</button>
+        </div>
+      </div>
       <div style="text-align:center;color:var(--muted-2);font-size:11px;font-family:var(--font-mono);padding:4px 0 8px;">
         Inventario El Rey · v0.3.0
       </div>
@@ -1077,6 +1089,7 @@ function _apConfig(el, demo) {
     Storage.set('config', State.config);
   };
   el.querySelector('#cfg-supabase').onclick = () => { State.modal = 'config'; render(); };
+  el.querySelector('#btn-logout-config').onclick = () => { if (!confirm('¿Cerrar sesión?')) return; logout(); render(); };
 }
 
 // ── Tab: Auditoría ────────────────────────────────────────────────────
