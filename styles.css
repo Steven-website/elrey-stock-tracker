@@ -291,6 +291,7 @@ main {
 .pill-info    { background: rgba(59,130,246,0.1); color: var(--info);    border: 1px solid rgba(59,130,246,0.24); }
 .pill-danger  { background: rgba(239,68,68,0.1);  color: var(--danger);  border: 1px solid rgba(239,68,68,0.24); }
 .pill-muted   { background: var(--surface-2);     color: var(--muted);   border: 1px solid var(--border); }
+.pill-accent  { background: rgba(245,184,0,0.15); color: var(--accent);  border: 1px solid rgba(245,184,0,0.35); }
 
 /* ---- Empty state ------------------------------------------------------- */
 .empty {

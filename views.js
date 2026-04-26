@@ -5,7 +5,7 @@
 import { State, Storage } from './state.js';
 import { API } from './api.js';
 import { ICON, $, escapeHtml, fmtDate, toast } from './utils.js';
-import { login, logout, isAdmin } from './auth.js';
+import { login, logout, isAdmin, isAdminTienda } from './auth.js';
 import { startScanner, stopScanner, isActive as scannerActive } from './scanner.js';
 import { render } from './main.js';
 
@@ -410,7 +410,9 @@ function movListItem(m) {
 // MÁS — admin ve panel completo, el resto ve vista simple
 // =====================================================================
 export function renderMasView() {
-  return isAdmin() ? renderAdminMasView() : renderUserMasView();
+  if (isAdmin())       return renderAdminMasView();
+  if (isAdminTienda()) return renderAdminTiendaMasView();
+  return renderUserMasView();
 }
 
 function renderUserMasView() {
@@ -465,7 +467,7 @@ function renderUserMasView() {
           <div style="font-weight:500;">${escapeHtml(u.nombre)}</div>
           <div class="meta"><span class="mono">${escapeHtml(u.username)}</span></div>
         </div>
-        <span class="pill pill-${rolColor(u.rol)}">${escapeHtml(u.rol)}</span>
+        <span class="pill pill-${rolColor(u.rol)}">${rolLabel(u.rol)}</span>
       </div>
     `)));
   }).catch(() => {});
@@ -609,8 +611,84 @@ function renderAdminMasView() {
   return wrap;
 }
 
+// =====================================================================
+// MÁS — vista Admin Tienda: solo gestión de usuarios de su tienda
+// =====================================================================
+function renderAdminTiendaMasView() {
+  const wrap = $(`<div></div>`);
+  const myTiendaId = State.user.tienda_id;
+
+  wrap.innerHTML = `
+    <div class="admin-header">
+      <div>
+        <div class="admin-header-title">${ICON.shield} Admin Tienda</div>
+        <div class="admin-header-sub">${escapeHtml(State.user.nombre)} · ${escapeHtml(State.user.username)}</div>
+      </div>
+      <span class="pill pill-accent">Admi Tienda</span>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Usuarios de tu tienda</div>
+      <div id="at-users" class="stack">
+        <div class="empty"><div class="loader"></div></div>
+      </div>
+    </div>
+
+    <div class="section" style="padding-top:0;">
+      <div class="section-title">Sesión</div>
+      <div class="setting-row" style="pointer-events:none;">
+        ${ICON.user}
+        <div class="grow">
+          <div style="font-weight:500;">${escapeHtml(State.user.nombre)}</div>
+          <div class="meta mono" style="font-size:11px;">${escapeHtml(State.user.username)} · Admi Tienda</div>
+        </div>
+      </div>
+      <button class="btn btn-danger btn-block" id="at-logout" style="margin-top:8px;">
+        ${ICON.logout} Cerrar sesión
+      </button>
+    </div>
+  `;
+
+  API.listUsers(true).then(users => {
+    const list = wrap.querySelector('#at-users');
+    // Solo usuarios de la misma tienda, excluir admin y admin_tienda
+    const filtered = users.filter(u =>
+      u.tienda_id === myTiendaId &&
+      u.id !== State.user.id &&
+      u.rol !== 'admin' &&
+      u.rol !== 'admin_tienda'
+    );
+    list.innerHTML = '';
+    if (filtered.length === 0) {
+      list.innerHTML = `<div class="empty"><h3>Sin usuarios</h3><p>No hay usuarios en tu tienda para gestionar.</p></div>`;
+      return;
+    }
+    filtered.forEach(u => list.appendChild(adminUserItem(u)));
+  }).catch(e => {
+    wrap.querySelector('#at-users').innerHTML =
+      `<div class="empty"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
+  });
+
+  wrap.querySelector('#at-logout').onclick = () => {
+    if (!confirm('¿Cerrar sesión?')) return;
+    logout(); render();
+  };
+
+  return wrap;
+}
+
+function rolLabel(rol) {
+  const map = {
+    admin: 'Master', admin_tienda: 'Admi Tienda',
+    supervisor: 'Supervisor', operario: 'Operario',
+    contador: 'Contador', auditor: 'Auditor'
+  };
+  return map[rol] || rol;
+}
+
 function rolColor(rol) {
   return rol === 'admin' ? 'warn'
+       : rol === 'admin_tienda' ? 'accent'
        : rol === 'supervisor' ? 'info'
        : rol === 'auditor' ? 'danger'
        : rol === 'contador' ? 'success'
@@ -628,7 +706,7 @@ function adminUserItem(u) {
           <span>${escapeHtml(u.email || '—')}</span>
         </div>
       </div>
-      <span class="pill pill-${rolColor(u.rol)}">${escapeHtml(u.rol)}</span>
+      <span class="pill pill-${rolColor(u.rol)}">${rolLabel(u.rol)}</span>
     </button>
   `);
   item.onclick = () => {

@@ -6,7 +6,7 @@ import { State, Storage } from './state.js';
 import { API, initSupabase } from './api.js';
 import { MOCK } from './mock.js';
 import { ICON, $, escapeHtml, fmtDate, fmtDateTime, toast, generateBoxCode } from './utils.js';
-import { isValidUsername, isValidPassword } from './auth.js';
+import { isValidUsername, isValidPassword, isAdminTienda } from './auth.js';
 import { startScanner, stopScanner } from './scanner.js';
 import { render } from './main.js';
 
@@ -780,7 +780,8 @@ export function renderCreateUserModal() {
       <option value="contador">Contador — conteos de inventario</option>
       <option value="auditor">Auditor — auditorías y verificación</option>
       <option value="supervisor">Supervisor — todo excepto admin</option>
-      <option value="admin">Admin — acceso total</option>
+      <option value="admin_tienda">Admi Tienda — gestiona usuarios de su tienda</option>
+      <option value="admin">Master — acceso total</option>
     </select>
 
     <label class="label" style="margin-top:12px;">Contraseña inicial</label>
@@ -836,6 +837,49 @@ export function renderEditUserModal() {
   const u = State.cache.editingUser;
   if (!u) { closeModal(); return $(`<div></div>`); }
   const isSelf = u.id === State.user.id;
+  const editorIsAdminTienda = isAdminTienda();
+
+  // admin_tienda no puede editar a otros admin o admin_tienda
+  if (editorIsAdminTienda && (u.rol === 'admin' || u.rol === 'admin_tienda')) {
+    closeModal();
+    return $(`<div></div>`);
+  }
+
+  // Vista reducida para admin_tienda: solo activar/desactivar
+  if (editorIsAdminTienda) {
+    const bodyHtml = `
+      <div class="box-header" style="margin-bottom:16px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+          <div>
+            <div style="font-weight:600; font-size:16px;">${escapeHtml(u.nombre)}</div>
+            <div class="meta mono" style="font-size:12px; color:var(--muted); margin-top:2px;">
+              ${escapeHtml(u.username)} · ${escapeHtml(u.rol)}
+            </div>
+          </div>
+          <span class="pill pill-${u.activo ? 'success' : 'muted'}">${u.activo ? 'activo' : 'inactivo'}</span>
+        </div>
+      </div>
+      <button class="btn btn-block ${u.activo ? 'btn-danger' : 'btn-success'}" id="at-toggle">
+        ${u.activo ? `${ICON.lock} Desactivar usuario` : `${ICON.check} Reactivar usuario`}
+      </button>
+      <div id="at-error" style="color:var(--danger); font-size:13px; margin-top:10px; min-height:18px;"></div>
+    `;
+    const footerHtml = `<button class="btn btn-block" id="at-cancel">Cerrar</button>`;
+    const modal = modalShell('Gestionar acceso', bodyHtml, footerHtml);
+    modal.querySelector('#at-cancel').onclick = () => { State.modal = null; State.view = 'mas'; render(); };
+    modal.querySelector('#at-toggle').onclick = async () => {
+      const errEl = modal.querySelector('#at-error');
+      const action = u.activo ? 'desactivar' : 'reactivar';
+      if (!confirm(`¿${action.charAt(0).toUpperCase() + action.slice(1)} a ${u.nombre}?`)) return;
+      try {
+        if (u.activo) await API.deactivateUser(u.id);
+        else await API.activateUser(u.id);
+        toast(`Usuario ${u.activo ? 'desactivado' : 'reactivado'}`, 'success');
+        State.modal = null; State.view = 'mas'; render();
+      } catch (e) { errEl.textContent = e.message; }
+    };
+    return modal;
+  }
 
   const bodyHtml = `
     <div class="box-header" style="margin-bottom:16px;">
@@ -852,11 +896,12 @@ export function renderEditUserModal() {
 
     <label class="label">Rol</label>
     <select class="select" id="e-rol" ${isSelf ? 'disabled' : ''}>
-      <option value="operario"   ${u.rol==='operario'?'selected':''}>Operario</option>
-      <option value="contador"   ${u.rol==='contador'?'selected':''}>Contador</option>
-      <option value="auditor"    ${u.rol==='auditor'?'selected':''}>Auditor</option>
-      <option value="supervisor" ${u.rol==='supervisor'?'selected':''}>Supervisor</option>
-      <option value="admin"      ${u.rol==='admin'?'selected':''}>Admin</option>
+      <option value="operario"    ${u.rol==='operario'?'selected':''}>Operario</option>
+      <option value="contador"    ${u.rol==='contador'?'selected':''}>Contador</option>
+      <option value="auditor"     ${u.rol==='auditor'?'selected':''}>Auditor</option>
+      <option value="supervisor"  ${u.rol==='supervisor'?'selected':''}>Supervisor</option>
+      <option value="admin_tienda" ${u.rol==='admin_tienda'?'selected':''}>Admi Tienda</option>
+      <option value="admin"       ${u.rol==='admin'?'selected':''}>Master</option>
     </select>
     ${isSelf ? '<div style="font-size:11px; color:var(--muted); margin-top:4px;">No podés cambiar tu propio rol</div>' : ''}
 

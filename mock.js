@@ -25,7 +25,8 @@ export const MOCK = {
     { id: 4, username: 'CCONTADOR', nombre: 'Carlos Contador',  email: 'ccontador@almaceneselrey.com',  rol: 'contador',   tienda_id: 1, activo: true,  password_hash: '' },
     { id: 5, username: 'AUDITOR',   nombre: 'Ana Auditora',     email: 'aauditora@almaceneselrey.com',  rol: 'auditor',    tienda_id: 1, activo: true,  password_hash: '' },
     { id: 6, username: 'HGOMEZ',    nombre: 'Hugo Gómez',       email: 'hgomez@almaceneselrey.com',     rol: 'supervisor', tienda_id: 2, activo: true,  password_hash: '' },
-    { id: 7, username: 'KLOPEZ',    nombre: 'Karina López',     email: 'klopez@almaceneselrey.com',     rol: 'operario',   tienda_id: 2, activo: true,  password_hash: '' }
+    { id: 7, username: 'KLOPEZ',    nombre: 'Karina López',     email: 'klopez@almaceneselrey.com',     rol: 'operario',   tienda_id: 2, activo: true,  password_hash: '' },
+    { id: 8, username: 'LADMIN',    nombre: 'Laura Admin',      email: 'ladmin@almaceneselrey.com',     rol: 'admin_tienda', tienda_id: 1, activo: true, password_hash: '' }
   ],
 
   posiciones: [
@@ -117,6 +118,8 @@ export const MOCK = {
   ]
 };
 
+// Credenciales demo:
+//   LADMIN    / tienda123   (admin_tienda · Alajuela)
 const _DEFAULT_PASSWORDS = {
   SSEGURA:   'admin123',
   MROJAS:    'super123',
@@ -124,7 +127,8 @@ const _DEFAULT_PASSWORDS = {
   CCONTADOR: 'cont123',
   AUDITOR:   'audit123',
   HGOMEZ:    'super456',
-  KLOPEZ:    'oper456'
+  KLOPEZ:    'oper456',
+  LADMIN:    'tienda123'
 };
 
 export async function initMockPasswords() {

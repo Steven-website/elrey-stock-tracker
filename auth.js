@@ -15,6 +15,9 @@ export async function login(username, password) {
   const user = await API.findUserByUsername(cleanU);
   if (!user) throw new Error('Usuario o contraseña incorrectos');
   if (!user.activo) throw new Error('Este usuario está desactivado');
+  if (user.acceso_hasta && new Date() >= new Date(user.acceso_hasta)) {
+    throw new Error('Tu período de acceso ha expirado');
+  }
   if (!user.password_hash) {
     throw new Error('Este usuario no tiene contraseña asignada. Pedile al admin que te configure una.');
   }
@@ -38,9 +41,11 @@ export function logout() {
 }
 
 // Helpers de rol
-export function isAdmin()       { return State.user?.rol === 'admin'; }
-export function isSupervisor()  { return ['admin', 'supervisor'].includes(State.user?.rol); }
-export function isContador()    { return ['admin', 'supervisor', 'contador'].includes(State.user?.rol); }
+export function isAdmin()             { return State.user?.rol === 'admin'; }
+export function isAdminTienda()       { return State.user?.rol === 'admin_tienda'; }
+export function canManageStoreUsers() { return ['admin', 'admin_tienda'].includes(State.user?.rol); }
+export function isSupervisor()  { return ['admin', 'admin_tienda', 'supervisor'].includes(State.user?.rol); }
+export function isContador()    { return ['admin', 'admin_tienda', 'supervisor', 'contador'].includes(State.user?.rol); }
 export function isAuditor()     { return ['admin', 'auditor'].includes(State.user?.rol); }
 
 // Validación de username (alfanumérico, sin espacios)
