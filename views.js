@@ -8,7 +8,7 @@ import { ICON, $, escapeHtml, fmtDate, toast, feedback } from './utils.js';
 import { login, logout, isAdmin, isAdminTienda } from './auth.js';
 import { getPendingCount } from './queue.js';
 import { startScanner, stopScanner, isActive as scannerActive } from './scanner.js';
-import { render } from './main.js';
+import { render, resetInactivityTimer } from './main.js';
 
 // =====================================================================
 // LOGIN — con usuario + contraseña
@@ -606,6 +606,17 @@ function renderAdminMasView() {
         </div>
         <span class="pill pill-${demo ? 'warn' : 'success'}">${demo ? 'demo' : 'live'}</span>
       </button>
+      <div class="setting-row" style="margin-bottom:4px;">
+        ${ICON.lock}
+        <div class="grow">
+          <div style="font-weight:500;">Cierre por inactividad</div>
+          <div class="meta" style="font-size:11px;">Aplica a todos los usuarios</div>
+        </div>
+        <select id="inactivity-sel" style="background:var(--surface-2); border:1px solid var(--border); color:var(--text); padding:4px 8px; border-radius:6px; font-size:12px; font-family:var(--font-mono);">
+          ${[5, 10, 30].map(m => `<option value="${m}" ${(State.config.inactivityMinutes??10)===m?'selected':''}>${m} min</option>`).join('')}
+          <option value="0" ${(State.config.inactivityMinutes??10)===0?'selected':''}>Nunca</option>
+        </select>
+      </div>
       <button class="btn btn-danger btn-block" id="btn-logout" style="margin-top:8px;">
         ${ICON.logout} Cerrar sesión
       </button>
@@ -676,6 +687,13 @@ function renderAdminMasView() {
   wrap.querySelector('#btn-new-user').onclick    = () => { State.cache.editingUser = null; State.modal = 'createUser'; render(); };
   wrap.querySelector('#cfg-supabase').onclick    = () => { State.modal = 'config';     render(); };
   wrap.querySelector('#btn-logout').onclick      = () => { if (!confirm('¿Cerrar sesión?')) return; logout(); render(); };
+  wrap.querySelector('#inactivity-sel').onchange = e => {
+    const minutes = parseInt(e.target.value);
+    State.config.inactivityMinutes = minutes;
+    Storage.set('config', State.config);
+    resetInactivityTimer();
+    toast(minutes === 0 ? 'Cierre por inactividad desactivado' : `Cierre por inactividad: ${minutes} min`, 'success');
+  };
 
   return wrap;
 }

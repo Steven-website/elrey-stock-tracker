@@ -95,9 +95,32 @@ async function syncQueue() {
 }
 
 // =====================================================================
+// INACTIVIDAD — cierra sesión si el usuario no interactúa
+// =====================================================================
+let _inactivityTimer = null;
+
+export function resetInactivityTimer() {
+  if (_inactivityTimer) clearTimeout(_inactivityTimer);
+  if (!State.user) return;
+  const minutes = State.config.inactivityMinutes ?? 10;
+  if (!minutes) return; // 0 = nunca
+  _inactivityTimer = setTimeout(() => {
+    forceLogout('Sesión cerrada por inactividad — volvé a ingresar');
+  }, minutes * 60_000);
+}
+
+function startInactivityWatch() {
+  ['click', 'touchstart', 'keydown', 'scroll', 'mousemove'].forEach(ev =>
+    document.addEventListener(ev, resetInactivityTimer, { passive: true })
+  );
+  resetInactivityTimer();
+}
+
+// =====================================================================
 // SESSION CHECK — revoca acceso si el usuario fue desactivado o venció su límite
 // =====================================================================
 function forceLogout(message) {
+  if (_inactivityTimer) { clearTimeout(_inactivityTimer); _inactivityTimer = null; }
   State.user = null;
   State.modal = null;
   Storage.remove('user');
@@ -134,6 +157,9 @@ async function boot() {
 
   // Verificación de sesión cada 45 segundos
   setInterval(checkSession, 45_000);
+
+  // Vigilancia de inactividad
+  startInactivityWatch();
 
   // Eventos globales
   window.addEventListener('online',  async () => {
