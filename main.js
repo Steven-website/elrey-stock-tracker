@@ -17,7 +17,9 @@ import {
   renderCreateBoxModal, renderScanProductModal,
   renderPrintQRModal,
   renderCreateUserModal, renderEditUserModal,
-  renderScanForSearchModal
+  renderScanForSearchModal,
+  renderArticulosModal, renderCreateArticuloModal, renderEditArticuloModal,
+  renderTiendasModal
 } from './modals.js';
 
 // =====================================================================
@@ -44,9 +46,13 @@ export function render() {
       create:        renderCreateBoxModal,
       scanProduct:   renderScanProductModal,
       print:         renderPrintQRModal,
-      createUser:    renderCreateUserModal,
-      editUser:      renderEditUserModal,
-      scanForSearch: renderScanForSearchModal
+      createUser:      renderCreateUserModal,
+      editUser:        renderEditUserModal,
+      scanForSearch:   renderScanForSearchModal,
+      articulos:       renderArticulosModal,
+      createArticulo:  renderCreateArticuloModal,
+      editArticulo:    renderEditArticuloModal,
+      tiendas:         renderTiendasModal
     };
     const renderer = map[State.modal];
     if (renderer) root.appendChild(renderer());

@@ -407,12 +407,15 @@ function movListItem(m) {
 }
 
 // =====================================================================
-// MÁS / SETTINGS — incluye gestión de usuarios para admin
+// MÁS — admin ve panel completo, el resto ve vista simple
 // =====================================================================
 export function renderMasView() {
+  return isAdmin() ? renderAdminMasView() : renderUserMasView();
+}
+
+function renderUserMasView() {
   const wrap = $(`<div></div>`);
-  const isDemoMode = !State.config.url || !State.config.anonKey;
-  const admin = isAdmin();
+  const demo = !State.config.url || !State.config.anonKey;
 
   wrap.innerHTML = `
     <div class="section">
@@ -424,91 +427,184 @@ export function renderMasView() {
         </div>
       </div>
     </div>
-
     <div class="section">
       <div class="section-title">Conexión</div>
-      <button class="setting-row" id="cfg-supabase" style="width:100%; text-align:left;">
+      <button class="setting-row" id="cfg-sup" style="width:100%; text-align:left;">
         ${ICON.database}
         <div class="grow">
           <div style="font-weight:500;">Supabase</div>
           <div class="meta mono" style="font-size:11px;">
-            ${isDemoMode ? 'Modo demo · sin conexión' : 'Conectado · ' + State.config.url.replace(/^https?:\/\//, '')}
+            ${demo ? 'Modo demo · sin conexión' : 'Conectado · ' + State.config.url.replace(/^https?:\/\//, '')}
           </div>
         </div>
-        <span class="pill pill-${isDemoMode ? 'warn' : 'success'}">${isDemoMode ? 'demo' : 'live'}</span>
+        <span class="pill pill-${demo ? 'warn' : 'success'}">${demo ? 'demo' : 'live'}</span>
       </button>
     </div>
-
-    ${admin ? `
-      <div class="section">
-        <div class="section-title">
-          Gestión de usuarios <span class="pill pill-warn" style="margin-left:8px;">${ICON.shield} admin</span>
-        </div>
-        <button class="btn btn-primary btn-block" id="btn-new-user" style="margin-bottom:8px;">
-          ${ICON.add} Crear usuario nuevo
-        </button>
-        <div id="admin-users" class="stack">
-          <div class="empty"><div class="loader"></div></div>
-        </div>
-      </div>
-    ` : `
-      <div class="section">
-        <div class="section-title">Equipo</div>
-        <div id="team-list" class="stack"><div class="empty"><div class="loader"></div></div></div>
-      </div>
-    `}
-
+    <div class="section">
+      <div class="section-title">Equipo</div>
+      <div id="team-list" class="stack"><div class="empty"><div class="loader"></div></div></div>
+    </div>
     <div class="section">
       <button class="btn btn-danger btn-block" id="btn-logout">${ICON.logout} Cerrar sesión</button>
     </div>
-
-    <div class="section" style="text-align:center; color:var(--muted); font-size:11px; padding-top:24px;">
-      <div class="mono">// inventario el rey · v0.2.0</div>
-      <div style="margin-top:4px;">Piloto interno · uso operativo</div>
+    <div class="section" style="text-align:center; color:var(--muted); font-size:11px; padding-top:16px;">
+      <div class="mono">// inventario el rey · v0.3.0</div>
     </div>
   `;
 
-  wrap.querySelector('#cfg-supabase').onclick = () => { State.modal = 'config'; render(); };
-  wrap.querySelector('#btn-logout').onclick = () => {
-    if (!confirm('¿Cerrar sesión?')) return;
-    logout();
-    render();
-  };
+  wrap.querySelector('#cfg-sup').onclick    = () => { State.modal = 'config'; render(); };
+  wrap.querySelector('#btn-logout').onclick = () => { if (!confirm('¿Cerrar sesión?')) return; logout(); render(); };
 
-  if (admin) {
-    wrap.querySelector('#btn-new-user').onclick = () => {
-      State.cache.editingUser = null;
-      State.modal = 'createUser';
-      render();
-    };
-    API.listUsers(true).then(users => {
-      const list = wrap.querySelector('#admin-users');
-      list.innerHTML = '';
-      users.forEach(u => list.appendChild(adminUserItem(u)));
-    }).catch(e => {
-      wrap.querySelector('#admin-users').innerHTML =
-        `<div class="empty"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
-    });
-  } else {
-    API.listUsers().then(users => {
-      const list = wrap.querySelector('#team-list');
-      list.innerHTML = '';
-      users.forEach(u => {
-        list.appendChild($(`
-          <div class="list-item">
-            <div class="icon-box">${ICON.user}</div>
-            <div class="grow">
-              <div style="font-weight:500;">${escapeHtml(u.nombre)}</div>
-              <div class="meta">
-                <span class="mono">${escapeHtml(u.username)}</span>
-              </div>
-            </div>
-            <span class="pill pill-${rolColor(u.rol)}">${escapeHtml(u.rol)}</span>
+  API.listUsers().then(users => {
+    const list = wrap.querySelector('#team-list');
+    list.innerHTML = '';
+    users.forEach(u => list.appendChild($(`
+      <div class="list-item">
+        <div class="icon-box">${ICON.user}</div>
+        <div class="grow">
+          <div style="font-weight:500;">${escapeHtml(u.nombre)}</div>
+          <div class="meta"><span class="mono">${escapeHtml(u.username)}</span></div>
+        </div>
+        <span class="pill pill-${rolColor(u.rol)}">${escapeHtml(u.rol)}</span>
+      </div>
+    `)));
+  }).catch(() => {});
+
+  return wrap;
+}
+
+function renderAdminMasView() {
+  const wrap = $(`<div></div>`);
+  const demo = !State.config.url || !State.config.anonKey;
+
+  wrap.innerHTML = `
+    <div class="admin-header">
+      <div>
+        <div class="admin-header-title">${ICON.shield} Panel de administración</div>
+        <div class="admin-header-sub">${escapeHtml(State.user.nombre)} · ${escapeHtml(State.user.username)}</div>
+      </div>
+      ${demo ? '<span class="pill pill-warn">demo</span>' : '<span class="pill pill-success">live</span>'}
+    </div>
+
+    <div class="section">
+      <div class="section-title">Resumen general</div>
+      <div class="kpi-grid" id="kpi-grid">
+        <div class="kpi-card" style="grid-column:1/-1; justify-content:center;">
+          <div class="loader"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section" style="padding-top:0;">
+      <div class="section-title">Módulos</div>
+      <div class="admin-modules">
+        <button class="admin-module" id="mod-articulos">
+          ${ICON.package}
+          <span>Artículos</span>
+          <small>Catálogo de productos</small>
+        </button>
+        <button class="admin-module" id="mod-tiendas">
+          ${ICON.pin}
+          <span>Tiendas</span>
+          <small>Sucursales y stock</small>
+        </button>
+      </div>
+    </div>
+
+    <div class="section" style="padding-top:0;">
+      <div class="section-title">
+        Usuarios <span class="pill pill-warn" style="margin-left:6px;">${ICON.shield} admin</span>
+      </div>
+      <button class="btn btn-primary btn-block" id="btn-new-user" style="margin-bottom:8px;">
+        ${ICON.add} Crear usuario nuevo
+      </button>
+      <div id="admin-users" class="stack">
+        <div class="empty"><div class="loader"></div></div>
+      </div>
+    </div>
+
+    <div class="section" style="padding-top:0;">
+      <div class="section-title">Sistema</div>
+      <button class="setting-row" id="cfg-supabase" style="width:100%; text-align:left; margin-bottom:4px;">
+        ${ICON.database}
+        <div class="grow">
+          <div style="font-weight:500;">Supabase</div>
+          <div class="meta mono" style="font-size:11px;">
+            ${demo ? 'Modo demo · sin conexión real' : 'Conectado · ' + State.config.url.replace(/^https?:\/\//, '')}
           </div>
-        `));
-      });
-    }).catch(()=>{});
-  }
+        </div>
+        <span class="pill pill-${demo ? 'warn' : 'success'}">${demo ? 'demo' : 'live'}</span>
+      </button>
+      <button class="btn btn-danger btn-block" id="btn-logout" style="margin-top:8px;">
+        ${ICON.logout} Cerrar sesión
+      </button>
+    </div>
+
+    <div class="section" style="text-align:center; color:var(--muted); font-size:11px; padding-top:16px;">
+      <div class="mono">// inventario el rey · v0.3.0</div>
+      <div style="margin-top:4px;">Piloto interno · panel admin</div>
+    </div>
+  `;
+
+  // KPIs — carga asíncrona
+  const hoy = new Date().toDateString();
+  Promise.all([
+    API.listCajas(false),
+    API.listCajas(true),
+    API.listMovimientos(300),
+    API.listUsers(false),
+    API.listArticulos()
+  ]).then(([activas, todas, movs, usuarios, arts]) => {
+    const totalUnidades = activas.reduce((s, c) => s + (c.unidades_totales || 0), 0);
+    const stockBajo     = activas.filter(c => (c.unidades_totales || 0) <= 5).length;
+    const movsHoy       = movs.filter(m => new Date(m.creado_at).toDateString() === hoy).length;
+    const consumidas    = todas.filter(c => c.estado === 'vacia').length;
+    wrap.querySelector('#kpi-grid').innerHTML = `
+      <div class="kpi-card">
+        <div class="kpi-val">${activas.length}</div>
+        <div class="kpi-label">Cajas activas</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val">${totalUnidades}</div>
+        <div class="kpi-label">Unidades totales</div>
+      </div>
+      <div class="kpi-card ${stockBajo > 0 ? 'kpi-warn' : ''}">
+        <div class="kpi-val">${stockBajo}</div>
+        <div class="kpi-label">Stock bajo</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val">${movsHoy}</div>
+        <div class="kpi-label">Movimientos hoy</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val">${usuarios.length}</div>
+        <div class="kpi-label">Usuarios activos</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-val">${arts.length}</div>
+        <div class="kpi-label">Artículos</div>
+      </div>
+    `;
+  }).catch(() => {
+    wrap.querySelector('#kpi-grid').innerHTML =
+      `<div class="kpi-card" style="grid-column:1/-1;"><div class="kpi-label">Error al cargar estadísticas</div></div>`;
+  });
+
+  // Lista de usuarios
+  API.listUsers(true).then(users => {
+    const list = wrap.querySelector('#admin-users');
+    list.innerHTML = '';
+    users.forEach(u => list.appendChild(adminUserItem(u)));
+  }).catch(e => {
+    wrap.querySelector('#admin-users').innerHTML =
+      `<div class="empty"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
+  });
+
+  wrap.querySelector('#mod-articulos').onclick  = () => { State.modal = 'articulos';  render(); };
+  wrap.querySelector('#mod-tiendas').onclick     = () => { State.modal = 'tiendas';    render(); };
+  wrap.querySelector('#btn-new-user').onclick    = () => { State.cache.editingUser = null; State.modal = 'createUser'; render(); };
+  wrap.querySelector('#cfg-supabase').onclick    = () => { State.modal = 'config';     render(); };
+  wrap.querySelector('#btn-logout').onclick      = () => { if (!confirm('¿Cerrar sesión?')) return; logout(); render(); };
 
   return wrap;
 }

@@ -988,3 +988,279 @@ async function handleSearchScanned(code) {
     render();
   }
 }
+
+// =====================================================================
+// GESTIÓN DE ARTÍCULOS (admin)
+// =====================================================================
+export function renderArticulosModal() {
+  const bodyHtml = `
+    <div id="arts-list">
+      <div class="empty"><div class="loader"></div></div>
+    </div>
+  `;
+  const footerHtml = `
+    <button class="btn btn-primary grow" id="btn-new-art">${ICON.add} Nuevo artículo</button>
+    <button class="btn grow" id="btn-close-arts">Cerrar</button>
+  `;
+  const modal = modalShell('Artículos', bodyHtml, footerHtml);
+
+  API.listArticulos().then(arts => {
+    const list = modal.querySelector('#arts-list');
+    list.innerHTML = '';
+    if (!arts.length) {
+      list.innerHTML = `<div class="empty">${ICON.empty}<h3>Sin artículos</h3></div>`;
+      return;
+    }
+    // Agrupar por familia
+    const familias = [...new Set(arts.map(a => a.familia || 'Sin familia'))].sort();
+    familias.forEach(fam => {
+      const grupo = arts.filter(a => (a.familia || 'Sin familia') === fam);
+      const header = $(`<div class="section-title" style="padding:12px 16px 6px; background:var(--surface-2); border-bottom:1px solid var(--border);">${escapeHtml(fam)} <small>${grupo.length}</small></div>`);
+      list.appendChild(header);
+      grupo.forEach(a => {
+        const row = $(`
+          <button class="list-item" style="text-align:left; width:100%; ${!a.activo ? 'opacity:0.5;' : ''}">
+            <div class="icon-box">${ICON.package}</div>
+            <div class="grow">
+              <div style="font-weight:500; font-size:13px;">${escapeHtml(a.descripcion)}</div>
+              <div class="meta">
+                <span class="mono">${escapeHtml(a.sku || '—')}</span>
+                ${a.unidades_por_caja ? `<span>${a.unidades_por_caja}/caja</span>` : ''}
+                ${!a.activo ? '<span class="pill pill-muted">inactivo</span>' : ''}
+              </div>
+            </div>
+            <span style="color:var(--muted);">›</span>
+          </button>
+        `);
+        row.onclick = () => { State.cache.editingArticulo = a; State.modal = 'editArticulo'; render(); };
+        list.appendChild(row);
+      });
+    });
+  }).catch(e => {
+    modal.querySelector('#arts-list').innerHTML =
+      `<div class="empty"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
+  });
+
+  modal.querySelector('#btn-new-art').onclick    = () => { State.modal = 'createArticulo'; render(); };
+  modal.querySelector('#btn-close-arts').onclick = () => closeModal();
+  return modal;
+}
+
+// =====================================================================
+// CREAR ARTÍCULO (admin)
+// =====================================================================
+export function renderCreateArticuloModal() {
+  const bodyHtml = `
+    <label class="label">SKU <span style="color:var(--danger);">*</span></label>
+    <input class="input mono" id="a-sku" placeholder="ej. CAN-010" autocapitalize="characters" />
+
+    <label class="label" style="margin-top:12px;">Descripción <span style="color:var(--danger);">*</span></label>
+    <input class="input" id="a-desc" placeholder="ej. Candil LED 75W blanco" />
+
+    <label class="label" style="margin-top:12px;">Familia / Categoría</label>
+    <input class="input" id="a-familia" placeholder="ej. Iluminación, Eléctrico, Plomería…" list="familias-list" />
+    <datalist id="familias-list">
+      <option value="Iluminación">
+      <option value="Eléctrico">
+      <option value="Plomería">
+      <option value="Ferretería">
+      <option value="Herramientas">
+    </datalist>
+
+    <label class="label" style="margin-top:12px;">Código de barras (opcional)</label>
+    <input class="input mono" id="a-barras" placeholder="ej. 7501234500011" inputmode="numeric" />
+
+    <label class="label" style="margin-top:12px;">Unidades por caja (opcional)</label>
+    <input class="input" id="a-upc" type="number" min="1" placeholder="ej. 24" inputmode="numeric" />
+
+    <div id="a-error" style="color:var(--danger); font-size:13px; margin-top:10px; min-height:18px;"></div>
+  `;
+  const footerHtml = `
+    <button class="btn grow" id="a-cancel">Cancelar</button>
+    <button class="btn btn-primary grow" id="a-save">Crear artículo</button>
+  `;
+  const modal = modalShell('Nuevo artículo', bodyHtml, footerHtml);
+  const errEl = modal.querySelector('#a-error');
+
+  modal.querySelector('#a-cancel').onclick = () => { State.modal = 'articulos'; render(); };
+  modal.querySelector('#a-save').onclick   = async () => {
+    errEl.textContent = '';
+    const sku            = modal.querySelector('#a-sku').value.trim().toUpperCase();
+    const descripcion    = modal.querySelector('#a-desc').value.trim();
+    const familia        = modal.querySelector('#a-familia').value.trim();
+    const codigo_barras  = modal.querySelector('#a-barras').value.trim() || null;
+    const upc            = parseInt(modal.querySelector('#a-upc').value) || null;
+
+    if (!sku)        { errEl.textContent = 'El SKU es obligatorio'; return; }
+    if (!descripcion){ errEl.textContent = 'La descripción es obligatoria'; return; }
+
+    try {
+      await API.createArticulo({ sku, descripcion, familia, codigo_barras, unidades_por_caja: upc });
+      toast(`Artículo ${sku} creado`, 'success');
+      State.modal = 'articulos';
+      render();
+    } catch (e) { errEl.textContent = e.message; }
+  };
+  return modal;
+}
+
+// =====================================================================
+// EDITAR ARTÍCULO (admin)
+// =====================================================================
+export function renderEditArticuloModal() {
+  const a = State.cache.editingArticulo;
+  if (!a) { closeModal(); return $(`<div></div>`); }
+
+  const bodyHtml = `
+    <div class="box-header" style="margin-bottom:16px;">
+      <div style="font-weight:600; font-size:15px;">${escapeHtml(a.descripcion)}</div>
+      <div class="meta mono" style="margin-top:4px; font-size:11px; color:var(--muted);">
+        ${escapeHtml(a.sku || '—')} ${a.codigo_barras ? '· ' + escapeHtml(a.codigo_barras) : ''}
+      </div>
+    </div>
+
+    <label class="label">Descripción</label>
+    <input class="input" id="ea-desc" value="${escapeHtml(a.descripcion)}" />
+
+    <label class="label" style="margin-top:12px;">Familia / Categoría</label>
+    <input class="input" id="ea-familia" value="${escapeHtml(a.familia || '')}" list="ea-familias-list" />
+    <datalist id="ea-familias-list">
+      <option value="Iluminación">
+      <option value="Eléctrico">
+      <option value="Plomería">
+      <option value="Ferretería">
+      <option value="Herramientas">
+    </datalist>
+
+    <label class="label" style="margin-top:12px;">Unidades por caja</label>
+    <input class="input" id="ea-upc" type="number" min="1" value="${a.unidades_por_caja || ''}" placeholder="— sin definir —" inputmode="numeric" />
+
+    <label class="label" style="margin-top:12px;">Código de barras</label>
+    <input class="input mono" id="ea-barras" value="${escapeHtml(a.codigo_barras || '')}" inputmode="numeric" />
+
+    <div style="margin-top:16px;">
+      <button class="btn btn-block ${a.activo ? 'btn-danger' : 'btn-ghost'}" id="ea-toggle">
+        ${a.activo ? `${ICON.lock} Desactivar artículo` : `${ICON.check} Reactivar artículo`}
+      </button>
+    </div>
+
+    <div id="ea-error" style="color:var(--danger); font-size:13px; margin-top:10px; min-height:18px;"></div>
+  `;
+  const footerHtml = `
+    <button class="btn grow" id="ea-cancel">Cancelar</button>
+    <button class="btn btn-primary grow" id="ea-save">Guardar cambios</button>
+  `;
+  const modal = modalShell('Editar artículo', bodyHtml, footerHtml);
+  const errEl = modal.querySelector('#ea-error');
+
+  modal.querySelector('#ea-cancel').onclick = () => { State.modal = 'articulos'; render(); };
+
+  modal.querySelector('#ea-toggle').onclick = async () => {
+    const accion = a.activo ? 'desactivar' : 'reactivar';
+    if (!confirm(`¿${accion.charAt(0).toUpperCase() + accion.slice(1)} este artículo?`)) return;
+    try {
+      await API.updateArticulo(a.id, { activo: !a.activo });
+      toast(`Artículo ${a.activo ? 'desactivado' : 'reactivado'}`, 'success');
+      State.modal = 'articulos';
+      render();
+    } catch (e) { errEl.textContent = e.message; }
+  };
+
+  modal.querySelector('#ea-save').onclick = async () => {
+    errEl.textContent = '';
+    const changes = {
+      descripcion:      modal.querySelector('#ea-desc').value.trim(),
+      familia:          modal.querySelector('#ea-familia').value.trim(),
+      unidades_por_caja: parseInt(modal.querySelector('#ea-upc').value) || null,
+      codigo_barras:    modal.querySelector('#ea-barras').value.trim() || null
+    };
+    if (!changes.descripcion) { errEl.textContent = 'La descripción es obligatoria'; return; }
+    try {
+      await API.updateArticulo(a.id, changes);
+      toast('Artículo actualizado', 'success');
+      State.modal = 'articulos';
+      render();
+    } catch (e) { errEl.textContent = e.message; }
+  };
+  return modal;
+}
+
+// =====================================================================
+// TIENDAS / SUCURSALES (admin)
+// =====================================================================
+export function renderTiendasModal() {
+  const bodyHtml = `
+    <div id="tiendas-list">
+      <div class="empty"><div class="loader"></div></div>
+    </div>
+  `;
+  const footerHtml = `<button class="btn btn-block" id="btn-close-tiendas">Cerrar</button>`;
+  const modal = modalShell('Tiendas / Sucursales', bodyHtml, footerHtml);
+
+  Promise.all([API.listTiendas(), API.listCajas(false), API.listUsers(true)]).then(([tiendas, cajas, usuarios]) => {
+    const list = modal.querySelector('#tiendas-list');
+    list.innerHTML = '';
+    tiendas.forEach(t => {
+      const cajasT    = cajas.filter(c => c.tienda_id === t.id);
+      const unidades  = cajasT.reduce((s, c) => s + (c.unidades_totales || 0), 0);
+      const usuariosT = usuarios.filter(u => u.tienda_id === t.id);
+      const stockBajo = cajasT.filter(c => (c.unidades_totales || 0) <= 5).length;
+
+      const card = $(`
+        <div class="tienda-card">
+          <div class="tienda-card-header">
+            <div>
+              <div style="font-weight:600; font-size:14px;">${escapeHtml(t.nombre)}</div>
+              <div class="meta mono" style="font-size:11px; margin-top:2px;">
+                <span>${escapeHtml(t.codigo)}</span>
+                <span class="pill pill-${t.activa ? 'success' : 'muted'}" style="margin-left:4px;">
+                  ${t.activa ? 'activa' : 'inactiva'}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="tienda-kpis">
+            <div class="tienda-kpi">
+              <div class="tienda-kpi-val">${cajasT.length}</div>
+              <div class="tienda-kpi-label">Cajas</div>
+            </div>
+            <div class="tienda-kpi">
+              <div class="tienda-kpi-val">${unidades}</div>
+              <div class="tienda-kpi-label">Unidades</div>
+            </div>
+            <div class="tienda-kpi ${stockBajo > 0 ? 'tienda-kpi-warn' : ''}">
+              <div class="tienda-kpi-val">${stockBajo}</div>
+              <div class="tienda-kpi-label">Stock bajo</div>
+            </div>
+            <div class="tienda-kpi">
+              <div class="tienda-kpi-val">${usuariosT.length}</div>
+              <div class="tienda-kpi-label">Usuarios</div>
+            </div>
+          </div>
+          ${cajasT.length ? `
+            <div style="padding:10px 14px 0; font-size:11px; color:var(--muted); font-family:var(--font-mono);">
+              // últimas cajas activas
+            </div>
+            <div class="stack" style="padding:6px 14px 10px; gap:3px;">
+              ${cajasT.slice(0, 3).map(c => `
+                <div style="display:flex; align-items:center; gap:8px; font-size:12px;">
+                  <span class="mono" style="color:var(--accent); font-size:11px;">${escapeHtml(c.codigo_caja.slice(-10))}</span>
+                  <span style="color:var(--muted);">${escapeHtml(c.posicion?.ubicacion || '—')}</span>
+                  <span style="margin-left:auto; font-family:var(--font-mono); font-weight:600;">${c.unidades_totales}</span>
+                </div>
+              `).join('')}
+              ${cajasT.length > 3 ? `<div style="font-size:11px; color:var(--muted-2);">+${cajasT.length - 3} más…</div>` : ''}
+            </div>
+          ` : `<div style="padding:10px 14px; font-size:12px; color:var(--muted);">Sin cajas activas</div>`}
+        </div>
+      `);
+      list.appendChild(card);
+    });
+  }).catch(e => {
+    modal.querySelector('#tiendas-list').innerHTML =
+      `<div class="empty"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
+  });
+
+  modal.querySelector('#btn-close-tiendas').onclick = () => closeModal();
+  return modal;
+}

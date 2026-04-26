@@ -411,5 +411,45 @@ export const API = {
     `).eq('caja_id', cajaId).order('creado_at', { ascending: false });
     if (error) throw error;
     return data.map(m => ({ ...m, articulo: m.articulos, usuario: m.usuarios }));
+  },
+
+  // -------------------- TIENDAS --------------------
+  async listTiendas() {
+    if (isDemoMode()) return MOCK.tiendas;
+    const { data, error } = await sb.from('tiendas').select('*').order('nombre');
+    if (error) throw error;
+    return data;
+  },
+
+  // -------------------- ARTÍCULOS (CRUD admin) --------------------
+  async createArticulo({ codigo_barras, sku, descripcion, familia, unidades_por_caja }) {
+    if (isDemoMode()) {
+      if (MOCK.articulos.some(a => a.sku === sku)) throw new Error('Ya existe un artículo con ese SKU');
+      const newArt = {
+        id: nextId(MOCK.articulos), codigo_barras, sku, descripcion,
+        familia, unidades_por_caja: unidades_por_caja || null, activo: true
+      };
+      MOCK.articulos.push(newArt);
+      return newArt;
+    }
+    const { data, error } = await sb.from('articulos').insert({
+      codigo_barras, sku, descripcion, familia,
+      unidades_por_caja: unidades_por_caja || null, activo: true
+    }).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async updateArticulo(id, changes) {
+    if (isDemoMode()) {
+      const a = MOCK.articulos.find(x => x.id === id);
+      if (!a) throw new Error('Artículo no encontrado');
+      Object.assign(a, changes);
+      return a;
+    }
+    const { data, error } = await sb.from('articulos').update(changes)
+      .eq('id', id).select().single();
+    if (error) throw error;
+    return data;
   }
 };
