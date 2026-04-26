@@ -116,24 +116,37 @@ export function renderShell() {
   `);
   wrap.appendChild(top);
 
+  // Admin Master solo ve vistas administrativas
+  const adminOnly = isAdmin();
+  if (adminOnly && State.view !== 'mov' && State.view !== 'mas') {
+    State.view = 'mas';
+  }
+
   const main = $(`<main></main>`);
-  if (State.view === 'scan')        main.appendChild(renderScanView());
-  else if (State.view === 'buscar') main.appendChild(renderBuscarView());
-  else if (State.view === 'cajas')  main.appendChild(renderCajasView());
-  else if (State.view === 'mov')    main.appendChild(renderMovView());
-  else if (State.view === 'mas')    main.appendChild(renderMasView());
+  if (!adminOnly && State.view === 'scan')        main.appendChild(renderScanView());
+  else if (!adminOnly && State.view === 'buscar') main.appendChild(renderBuscarView());
+  else if (!adminOnly && State.view === 'cajas')  main.appendChild(renderCajasView());
+  else if (State.view === 'mov')                  main.appendChild(renderMovView());
+  else if (State.view === 'mas')                  main.appendChild(renderMasView());
   wrap.appendChild(main);
 
   const pending = getPendingCount();
-  const nav = $(`
-    <nav class="tabs">
-      <button data-v="scan"   class="${State.view==='scan'?'active':''}">${ICON.scan}<span>Escanear</span></button>
-      <button data-v="buscar" class="${State.view==='buscar'?'active':''}">${ICON.search}<span>Buscar</span></button>
-      <button data-v="cajas"  class="${State.view==='cajas'?'active':''}">${ICON.box}<span>Cajas</span></button>
-      <button data-v="mov"    class="${State.view==='mov'?'active':''}">${ICON.list}<span>Mov.</span>${pending > 0 ? `<span class="nav-badge">${pending}</span>` : ''}</button>
-      <button data-v="mas"    class="${State.view==='mas'?'active':''}">${ICON.more}<span>Más</span></button>
-    </nav>
-  `);
+  const nav = adminOnly
+    ? $(`
+      <nav class="tabs">
+        <button data-v="mov"    class="${State.view==='mov'?'active':''}">${ICON.list}<span>Movimientos</span>${pending > 0 ? `<span class="nav-badge">${pending}</span>` : ''}</button>
+        <button data-v="mas"    class="${State.view==='mas'?'active':''}">${ICON.shield}<span>Admin</span></button>
+      </nav>
+    `)
+    : $(`
+      <nav class="tabs">
+        <button data-v="scan"   class="${State.view==='scan'?'active':''}">${ICON.scan}<span>Escanear</span></button>
+        <button data-v="buscar" class="${State.view==='buscar'?'active':''}">${ICON.search}<span>Buscar</span></button>
+        <button data-v="cajas"  class="${State.view==='cajas'?'active':''}">${ICON.box}<span>Cajas</span></button>
+        <button data-v="mov"    class="${State.view==='mov'?'active':''}">${ICON.list}<span>Mov.</span>${pending > 0 ? `<span class="nav-badge">${pending}</span>` : ''}</button>
+        <button data-v="mas"    class="${State.view==='mas'?'active':''}">${ICON.more}<span>Más</span></button>
+      </nav>
+    `);
   nav.querySelectorAll('button').forEach(b => {
     b.onclick = () => {
       if (scannerActive() && b.dataset.v !== 'scan') stopScanner();
