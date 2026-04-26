@@ -2,8 +2,8 @@
 // main.js — punto de entrada de la aplicación
 // =====================================================================
 
-import { State, isDemoMode } from './state.js';
-import { initSupabase } from './api.js';
+import { State, Storage, isDemoMode } from './state.js';
+import { API, initSupabase } from './api.js';
 import { initMockPasswords } from './mock.js';
 import { stopScanner } from './scanner.js';
 import { $ } from './utils.js';
@@ -64,6 +64,31 @@ export function render() {
 }
 
 // =====================================================================
+// SESSION CHECK — revoca acceso si el usuario fue desactivado o venció su límite
+// =====================================================================
+function forceLogout(message) {
+  State.user = null;
+  State.modal = null;
+  Storage.remove('user');
+  render();
+  import('./utils.js').then(m => m.toast(message, 'error'));
+}
+
+async function checkSession() {
+  if (!State.user) return;
+  try {
+    const fresh = await API.findUserByUsername(State.user.username);
+    if (!fresh || !fresh.activo) {
+      forceLogout('Tu acceso fue desactivado por el administrador');
+      return;
+    }
+    if (fresh.acceso_hasta && new Date() >= new Date(fresh.acceso_hasta)) {
+      forceLogout('Tu período de acceso ha expirado');
+    }
+  } catch (_) { /* ignorar errores de red */ }
+}
+
+// =====================================================================
 // BOOT
 // =====================================================================
 async function boot() {
@@ -76,11 +101,15 @@ async function boot() {
   // Render inicial
   render();
 
+  // Verificación de sesión cada 45 segundos
+  setInterval(checkSession, 45_000);
+
   // Eventos globales
   window.addEventListener('online',  () => import('./utils.js').then(m => m.toast('Conectado a internet', 'success')));
   window.addEventListener('offline', () => import('./utils.js').then(m => m.toast('Sin conexión', 'error')));
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) stopScanner();
+    if (document.hidden) { stopScanner(); return; }
+    checkSession(); // verificar al regresar a la pestaña
   });
 }
 

@@ -38,6 +38,28 @@ export function closeModal() {
   render();
 }
 
+// Convierte ISO UTC → string para input datetime-local en hora Costa Rica (UTC-6)
+function utcToCRInput(iso) {
+  if (!iso) return '';
+  const cr = new Date(new Date(iso).getTime() - 6 * 60 * 60 * 1000);
+  return cr.toISOString().slice(0, 16);
+}
+
+// Convierte string de datetime-local (hora CR) → ISO UTC
+function crInputToUtc(local) {
+  if (!local) return null;
+  return new Date(local + ':00-06:00').toISOString();
+}
+
+// Formatea fecha ISO en hora Costa Rica legible
+function formatCRTime(iso) {
+  return new Date(iso).toLocaleString('es-CR', {
+    timeZone: 'America/Costa_Rica',
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
+
 // =====================================================================
 // CAJA: detalle
 // =====================================================================
@@ -851,6 +873,23 @@ export function renderEditUserModal() {
 
     <div class="divider"></div>
 
+    <label class="label">Límite de acceso (hora Costa Rica)</label>
+    <div style="font-size:11px; color:var(--muted); margin-bottom:6px;" id="e-acceso-status">
+      ${u.acceso_hasta
+        ? `Expira: <strong style="color:var(--warn)">${formatCRTime(u.acceso_hasta)}</strong>`
+        : 'Sin límite — acceso indefinido'}
+    </div>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <input class="input" type="datetime-local" id="e-acceso-hasta"
+             value="${utcToCRInput(u.acceso_hasta)}" style="flex:1;" />
+      <button class="btn" id="e-clear-acceso" title="Quitar límite" style="flex-shrink:0;">${ICON.close}</button>
+    </div>
+    <div style="font-size:11px; color:var(--muted); margin-top:4px;">
+      Al llegar esa fecha/hora el sistema cierra la sesión automáticamente.
+    </div>
+
+    <div class="divider"></div>
+
     ${!isSelf ? `
       <button class="btn btn-block ${u.activo ? 'btn-danger' : 'btn-success'}" id="e-toggle">
         ${u.activo ? `${ICON.lock} Desactivar usuario` : `${ICON.check} Reactivar usuario`}
@@ -867,6 +906,11 @@ export function renderEditUserModal() {
 
   const errEl = modal.querySelector('#e-error');
   modal.querySelector('#e-cancel').onclick = () => { State.modal = null; State.view = 'mas'; render(); };
+
+  modal.querySelector('#e-clear-acceso').onclick = () => {
+    modal.querySelector('#e-acceso-hasta').value = '';
+    modal.querySelector('#e-acceso-status').innerHTML = 'Sin límite — acceso indefinido';
+  };
 
   modal.querySelector('#e-reset').onclick = async () => {
     errEl.textContent = '';
@@ -895,6 +939,12 @@ export function renderEditUserModal() {
     const changes = {};
     const newRol = modal.querySelector('#e-rol').value;
     if (!isSelf && newRol !== u.rol) changes.rol = newRol;
+
+    const inputVal = modal.querySelector('#e-acceso-hasta').value;
+    const newAcceso = inputVal ? crInputToUtc(inputVal) : null;
+    const oldAcceso = u.acceso_hasta || null;
+    if (newAcceso !== oldAcceso) changes.acceso_hasta = newAcceso;
+
     if (Object.keys(changes).length === 0) {
       toast('No hay cambios para guardar', 'info');
       return;
