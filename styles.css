@@ -441,7 +441,7 @@ main {
 }
 
 /* ---- Modals ----------------------------------------------------------- */
-.modal {
+.modal-backdrop {
   position: fixed; inset: 0;
   background: rgba(0,0,0,0.72);
   z-index: 100;
@@ -449,7 +449,7 @@ main {
   align-items: flex-end;
 }
 
-.modal-inner {
+.modal-sheet {
   background: var(--surface);
   width: 100%;
   max-height: 92dvh;
@@ -457,6 +457,14 @@ main {
   flex-direction: column;
   overflow: hidden;
   border-top: 1px solid var(--border);
+}
+
+.modal-handle {
+  width: 36px; height: 4px;
+  background: var(--border-2);
+  border-radius: 2px;
+  margin: 10px auto 4px;
+  flex-shrink: 0;
 }
 
 .modal-header {
@@ -769,3 +777,149 @@ main {
   font-size: 11px;
 }
 .tienda-caja-pos { color: var(--muted); }
+
+/* =====================================================================
+   RESPONSIVE — Diseño escritorio (≥ 768 px)
+===================================================================== */
+@media (min-width: 768px) {
+
+  /* Body: sin límite de ancho móvil */
+  body {
+    max-width: none;
+    flex-direction: row;
+  }
+
+  /* App root: grid con sidebar izquierdo */
+  #app {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    grid-template-rows: auto 1fr;
+    min-height: 100dvh;
+    width: 100%;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+
+  /* Topbar: fila superior que abarca ambas columnas */
+  .topbar {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    padding: 12px 24px;
+  }
+
+  .brand-mark  { width: 34px; height: 34px; font-size: 13px; }
+  .brand-name  { font-size: 15px; }
+  .user-chip   { font-size: 12px; padding: 6px 12px; }
+
+  /* Tabs: sidebar vertical izquierdo */
+  .tabs {
+    grid-column: 1;
+    grid-row: 2;
+    flex-direction: column;
+    border-top: none;
+    border-right: 1px solid var(--border);
+    position: sticky;
+    top: 57px;
+    height: calc(100dvh - 57px);
+    overflow-y: auto;
+    justify-content: flex-start;
+    align-items: stretch;
+    padding: 12px 8px;
+    gap: 2px;
+    background: var(--surface);
+  }
+
+  .tabs button {
+    flex: none;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-right: none;
+    border-bottom: none;
+    border-radius: 8px;
+    font-size: 13px;
+    min-height: 44px;
+    color: var(--muted);
+  }
+
+  .tabs button:last-child { border-right: none; }
+
+  .tabs button.active {
+    color: var(--accent);
+    background: rgba(245,184,0,0.08);
+  }
+
+  .tabs button svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+
+  .tabs button span {
+    font-size: 13px;
+  }
+
+  /* Área principal: columna derecha */
+  main {
+    grid-column: 2;
+    grid-row: 2;
+    overflow-y: auto;
+    max-width: 760px;
+    padding-bottom: 40px;
+  }
+
+  .section { padding: 16px 28px; }
+
+  /* KPI grid: más columnas en escritorio */
+  .kpi-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+
+  .kpi-val   { font-size: 28px; }
+  .kpi-label { font-size: 11px; }
+
+  /* Módulos admin: 4 en una fila */
+  .admin-modules {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  /* Tienda KPIs: 4 columnas */
+  .tienda-kpis {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  /* Modal: diálogo centrado en lugar de sheet inferior */
+  .modal-backdrop {
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .modal-sheet {
+    width: 100%;
+    max-width: 520px;
+    max-height: 85vh;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    border-top: 1px solid var(--border);
+  }
+
+  .modal-handle { display: none; }
+
+  /* Toast: no hay bottom nav, ajustar posición */
+  #toast-container { bottom: 24px; }
+
+  /* Demo badge */
+  .demo-badge { top: 68px; }
+
+  /* Login: centrar en pantalla */
+  .fullscreen {
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
