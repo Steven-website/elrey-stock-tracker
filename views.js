@@ -6,6 +6,7 @@ import { State, Storage } from './state.js';
 import { API } from './api.js';
 import { ICON, $, escapeHtml, fmtDate, toast, feedback } from './utils.js';
 import { login, logout, isAdmin, isAdminTienda } from './auth.js';
+import { getPendingCount } from './queue.js';
 import { startScanner, stopScanner, isActive as scannerActive } from './scanner.js';
 import { render } from './main.js';
 
@@ -123,12 +124,13 @@ export function renderShell() {
   else if (State.view === 'mas')    main.appendChild(renderMasView());
   wrap.appendChild(main);
 
+  const pending = getPendingCount();
   const nav = $(`
     <nav class="tabs">
       <button data-v="scan"   class="${State.view==='scan'?'active':''}">${ICON.scan}<span>Escanear</span></button>
       <button data-v="buscar" class="${State.view==='buscar'?'active':''}">${ICON.search}<span>Buscar</span></button>
       <button data-v="cajas"  class="${State.view==='cajas'?'active':''}">${ICON.box}<span>Cajas</span></button>
-      <button data-v="mov"    class="${State.view==='mov'?'active':''}">${ICON.list}<span>Mov.</span></button>
+      <button data-v="mov"    class="${State.view==='mov'?'active':''}">${ICON.list}<span>Mov.</span>${pending > 0 ? `<span class="nav-badge">${pending}</span>` : ''}</button>
       <button data-v="mas"    class="${State.view==='mas'?'active':''}">${ICON.more}<span>Más</span></button>
     </nav>
   `);

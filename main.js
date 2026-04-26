@@ -4,6 +4,7 @@
 
 import { State, Storage, isDemoMode } from './state.js';
 import { API, initSupabase } from './api.js';
+import { getQueue, dequeue, getPendingCount } from './queue.js';
 import { initMockPasswords } from './mock.js';
 import { stopScanner } from './scanner.js';
 import { $ } from './utils.js';
@@ -64,6 +65,36 @@ export function render() {
 }
 
 // =====================================================================
+// SYNC QUEUE — envía movimientos pendientes al volver la conexión
+// =====================================================================
+export function getPendingBadge() { return getPendingCount(); }
+
+async function syncQueue() {
+  if (isDemoMode()) return;
+  const queue = getQueue();
+  if (!queue.length) return;
+
+  const { toast } = await import('./utils.js');
+  toast(`Sincronizando ${queue.length} movimiento${queue.length > 1 ? 's' : ''} pendiente${queue.length > 1 ? 's' : ''}…`, 'info');
+
+  let ok = 0, fail = 0;
+  for (const mov of queue) {
+    const { _qid, _queued, ...movData } = mov;
+    try {
+      await API.createMovimiento(movData);
+      dequeue(_qid);
+      ok++;
+    } catch {
+      fail++;
+    }
+  }
+
+  if (ok)   toast(`${ok} movimiento${ok > 1 ? 's' : ''} sincronizado${ok > 1 ? 's' : ''} ✓`, 'success');
+  if (fail) toast(`${fail} movimiento${fail > 1 ? 's' : ''} fallaron — revisar en Mov.`, 'error');
+  render();
+}
+
+// =====================================================================
 // SESSION CHECK — revoca acceso si el usuario fue desactivado o venció su límite
 // =====================================================================
 function forceLogout(message) {
@@ -105,8 +136,11 @@ async function boot() {
   setInterval(checkSession, 45_000);
 
   // Eventos globales
-  window.addEventListener('online',  () => import('./utils.js').then(m => m.toast('Conectado a internet', 'success')));
-  window.addEventListener('offline', () => import('./utils.js').then(m => m.toast('Sin conexión', 'error')));
+  window.addEventListener('online',  async () => {
+    import('./utils.js').then(m => m.toast('Conectado a internet', 'success'));
+    await syncQueue();
+  });
+  window.addEventListener('offline', () => import('./utils.js').then(m => m.toast('Sin conexión — los movimientos se guardarán localmente', 'warn')));
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) { stopScanner(); return; }
     checkSession(); // verificar al regresar a la pestaña

@@ -261,13 +261,23 @@ function renderQtyModal(tipo) {
     const motivo = modal.querySelector('#motivo').value;
     const notas = modal.querySelector('#notas').value;
     try {
-      await API.createMovimiento({
+      const result = await API.createMovimiento({
         tipo, caja_id: c.id, articulo_id: artId,
         cantidad, motivo, notas, usuario_id: State.user.id
       });
-      toast(`${verb} ${cantidad} unidades · OK`, 'success');
-      const updated = await API.getCajaByCode(c.codigo_caja);
-      State.cache.currentBox = updated;
+      if (result?.pending) {
+        // Sin conexión — actualizar estado local para que la UI refleje el cambio
+        if (item) {
+          if (tipo === 'reducir') item.cantidad_actual = Math.max(0, item.cantidad_actual - cantidad);
+          else item.cantidad_actual += cantidad;
+        }
+        feedback('ok');
+        toast(`Sin señal · ${verb.toLowerCase()} guardado, se enviará al reconectar`, 'warn');
+      } else {
+        toast(`${verb} ${cantidad} unidades · OK`, 'success');
+        const updated = await API.getCajaByCode(c.codigo_caja);
+        if (updated) State.cache.currentBox = updated;
+      }
       State.modal = 'box';
       render();
     } catch (e) {

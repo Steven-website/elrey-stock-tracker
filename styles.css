@@ -191,6 +191,27 @@ main {
 .tabs button:last-child { border-right: 0; }
 .tabs button.active { color: var(--accent); background: rgba(245,184,0,0.06); }
 .tabs button svg { width: 20px; height: 20px; }
+.tabs button { position: relative; }
+
+.nav-badge {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  min-width: 15px;
+  height: 15px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+  font-family: var(--font-mono);
+  line-height: 1;
+  pointer-events: none;
+}
 
 /* ---- Section ---------------------------------------------------------- */
 .section { padding: 14px 16px; }

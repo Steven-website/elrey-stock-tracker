@@ -379,6 +379,12 @@ export const API = {
       }
       return { id: newId };
     }
+    // Sin conexión: encolar para sincronizar después
+    if (!navigator.onLine) {
+      const { enqueue } = await import('./queue.js');
+      enqueue({ ...mov });
+      return { pending: true };
+    }
     const { data, error } = await sb.from('movimientos').insert(mov).select().single();
     if (error) throw error;
     if (mov.tipo === 'reducir' || mov.tipo === 'aumentar') {
