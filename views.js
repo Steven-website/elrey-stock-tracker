@@ -647,30 +647,12 @@ function renderPerfilView() {
         <div class="perfil-card-val" id="perfil-tienda">—</div>
       </div>
       <div class="perfil-card">
-        <div class="perfil-card-lbl">Conexión</div>
-        <div class="perfil-card-val">
-          <span class="pill pill-${demo ? 'warn' : 'success'}" style="font-size:11px;">${demo ? 'Demo' : 'Live'}</span>
-        </div>
-      </div>
-      <div class="perfil-card">
         <div class="perfil-card-lbl">Último acceso</div>
         <div class="perfil-card-val" style="font-size:13px;">${u.ultimo_login ? fmtDate(u.ultimo_login) : '—'}</div>
-      </div>
-      <div class="perfil-card">
-        <div class="perfil-card-lbl">Acceso hasta</div>
-        <div class="perfil-card-val" style="font-size:13px;">${u.acceso_hasta ? new Date(u.acceso_hasta).toLocaleDateString('es-CR') : 'Sin límite'}</div>
       </div>
     </div>
 
     <div class="perfil-actions">
-      <button class="perfil-action-btn" id="btn-cfg-conn">
-        ${ICON.database}
-        <div>
-          <div style="font-weight:600; font-size:13px;">Configurar conexión</div>
-          <div style="font-size:11px; color:var(--muted);">${demo ? 'Conectar Supabase' : State.config.url.replace(/^https?:\/\//, '')}</div>
-        </div>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-left:auto;flex-shrink:0;color:var(--muted-2);"><path d="M9 18l6-6-6-6"/></svg>
-      </button>
       <button class="perfil-action-btn" id="btn-cfg-pwd">
         ${ICON.lock}
         <div>
@@ -686,8 +668,7 @@ function renderPerfilView() {
     </div>
   `;
 
-  wrap.querySelector('#btn-cfg-conn').onclick = () => { State.modal = 'config'; render(); };
-  wrap.querySelector('#btn-cfg-pwd').onclick  = () => { State.modal = 'cambiar-password'; render(); };
+  wrap.querySelector('#btn-cfg-pwd').onclick = () => { State.modal = 'cambiar-password'; render(); };
 
   // Resolver nombre de tienda async
   API.listTiendas().then(tiendas => {
