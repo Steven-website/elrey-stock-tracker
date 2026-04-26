@@ -5,7 +5,7 @@
 import { State, Storage } from './state.js';
 import { API } from './api.js';
 import { ICON, $, escapeHtml, fmtDate, toast, feedback } from './utils.js';
-import { login, logout, isAdmin, isAdminTienda } from './auth.js';
+import { login, logout, isAdmin, isAdminTienda, canExport } from './auth.js';
 import { getPendingCount } from './queue.js';
 import { startScanner, stopScanner, isActive as scannerActive } from './scanner.js';
 import { render, resetInactivityTimer } from './main.js';
@@ -343,6 +343,57 @@ export function renderCajasView() {
 }
 
 // =====================================================================
+// EXCEL EXPORT
+// =====================================================================
+function exportToExcel(movs) {
+  if (!movs || !movs.length) return;
+  if (!window.XLSX) { toast('SheetJS no cargó — verificá tu conexión', 'error'); return; }
+
+  const toCR = iso => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    // UTC-6 for Costa Rica
+    const cr = new Date(d.getTime() - 6 * 60 * 60 * 1000);
+    const pad = n => String(n).padStart(2, '0');
+    return `${cr.getUTCFullYear()}-${pad(cr.getUTCMonth()+1)}-${pad(cr.getUTCDate())} ${pad(cr.getUTCHours())}:${pad(cr.getUTCMinutes())}`;
+  };
+
+  const tipoLabel = t =>
+    t === 'reducir' ? 'Salida'
+    : t === 'aumentar' ? 'Entrada'
+    : t === 'crear_caja' ? 'Crear caja'
+    : t === 'trasladar_caja' ? 'Traslado'
+    : t || '';
+
+  const rows = movs.map(m => ({
+    'Fecha/Hora (CR)': toCR(m.creado_at),
+    'Tipo':            tipoLabel(m.tipo),
+    'Caja':            m.caja?.codigo || m.caja_id || '',
+    'SKU':             m.articulo?.sku || '',
+    'Artículo':        m.articulo?.nombre || '',
+    'Cantidad':        m.cantidad ?? '',
+    'Usuario':         m.usuario?.username || '',
+    'Motivo':          m.motivo || '',
+    'Notas':           m.notas || ''
+  }));
+
+  const ws = window.XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [
+    { wch: 18 }, { wch: 12 }, { wch: 14 }, { wch: 12 },
+    { wch: 28 }, { wch: 9  }, { wch: 14 }, { wch: 18 }, { wch: 22 }
+  ];
+
+  const wb = window.XLSX.utils.book_new();
+  window.XLSX.utils.book_append_sheet(wb, ws, 'Movimientos');
+
+  const today = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const fname = `movimientos_${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}.xlsx`;
+  window.XLSX.writeFile(wb, fname);
+  toast(`Exportado: ${fname}`, 'success');
+}
+
+// =====================================================================
 // MOVIMIENTOS VIEW
 // =====================================================================
 export function renderMovView() {
@@ -352,13 +403,21 @@ export function renderMovView() {
 
   wrap.innerHTML = `
     <div class="section" style="padding-bottom:8px;">
-      <div class="mov-filter-bar">
-        <button class="mov-filter-btn ${State.cache.movFilter === 'all' ? 'active' : ''}" data-f="all">
-          ${ICON.list} Todos
-        </button>
-        <button class="mov-filter-btn ${State.cache.movFilter === 'mine' ? 'active' : ''}" data-f="mine">
-          ${ICON.user} Mis movimientos hoy
-        </button>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <div class="mov-filter-bar" style="flex:1;">
+          <button class="mov-filter-btn ${State.cache.movFilter === 'all' ? 'active' : ''}" data-f="all">
+            ${ICON.list} Todos
+          </button>
+          <button class="mov-filter-btn ${State.cache.movFilter === 'mine' ? 'active' : ''}" data-f="mine">
+            ${ICON.user} Mis movimientos hoy
+          </button>
+        </div>
+        ${canExport() ? `
+          <button class="btn btn-excel" id="btn-export" title="Exportar a Excel" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h2.5M13.5 13H16M8 17h2.5M13.5 17H16M10.5 13v4"/></svg>
+            Excel
+          </button>
+        ` : ''}
       </div>
     </div>
     <div class="section" style="padding-top:0;">
@@ -374,6 +433,7 @@ export function renderMovView() {
   `;
 
   let allMovs = [];
+  let currentFiltered = [];
 
   function applyFilter() {
     const f = State.cache.movFilter;
@@ -406,6 +466,10 @@ export function renderMovView() {
       summary.style.display = 'none';
     }
 
+    currentFiltered = filtered;
+    const btnExport = wrap.querySelector('#btn-export');
+    if (btnExport) btnExport.disabled = filtered.length === 0;
+
     const list = wrap.querySelector('#mov-list');
     list.innerHTML = '';
     if (!filtered.length) {
@@ -414,6 +478,11 @@ export function renderMovView() {
       return;
     }
     filtered.forEach(m => list.appendChild(movListItem(m)));
+  }
+
+  const btnExport = wrap.querySelector('#btn-export');
+  if (btnExport) {
+    btnExport.onclick = () => exportToExcel(currentFiltered);
   }
 
   wrap.querySelectorAll('.mov-filter-btn').forEach(btn => {

@@ -799,6 +799,33 @@ main {
 }
 .tienda-caja-pos { color: var(--muted); }
 
+/* ---- Botón Excel -------------------------------------------------------- */
+.btn-excel {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 12px;
+  background: rgba(33, 150, 83, 0.12);
+  border: 1px solid rgba(33, 150, 83, 0.4);
+  border-radius: 8px;
+  color: #21a35a;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+
+.btn-excel:hover:not(:disabled) {
+  background: rgba(33, 150, 83, 0.22);
+  border-color: rgba(33, 150, 83, 0.7);
+}
+
+.btn-excel:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 /* ---- Filtro de movimientos ------------------------------------------- */
 .mov-filter-bar {
   display: flex;
