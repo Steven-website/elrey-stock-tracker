@@ -23,6 +23,40 @@ export async function login(username, password) {
     logEvent('login_fail', { username: cleanU, detalles: 'Contraseña incorrecta' });
     throw new Error('Usuario o contraseña incorrectos');
   }
+  // Validar turno para operario y contador
+  const ROLES_CON_TURNO = ['operario', 'contador'];
+  if (ROLES_CON_TURNO.includes(user.rol)) {
+    const turnoHoy = await API.checkTurnoHoy(user.id);
+    const isDemoMode = !State.config.url || !State.config.anonKey;
+    if (turnoHoy === null) {
+      // Día libre explícito
+      if (!isDemoMode) {
+        logEvent('login_fail', { username: cleanU, detalles: 'Día libre' });
+        throw new Error('Hoy es tu día libre. No tenés acceso programado.');
+      }
+      State.turnoAviso = 'Hoy es tu día libre (en producción el acceso estaría bloqueado).';
+    } else if (turnoHoy !== undefined) {
+      // Hay turno asignado — verificar hora actual
+      const hora = new Date().getHours();
+      const { nombre, hora_inicio, hora_fin, color } = turnoHoy;
+      const dentro = hora_fin === 24 ? hora >= hora_inicio : (hora >= hora_inicio && hora < hora_fin);
+      const fmtH = h => `${String(h === 24 ? 0 : h).padStart(2, '0')}:00`;
+      if (!dentro) {
+        if (!isDemoMode) {
+          logEvent('login_fail', { username: cleanU, detalles: `Fuera de turno ${nombre}` });
+          throw new Error(`Tu turno es ${nombre} (${fmtH(hora_inicio)} – ${fmtH(hora_fin)}). Intentá en ese horario.`);
+        }
+        State.turnoAviso = `Turno ${nombre}: ${fmtH(hora_inicio)} – ${fmtH(hora_fin)} (en producción el acceso estaría bloqueado fuera de ese horario).`;
+      } else {
+        State.turnoAviso = `Turno ${nombre} activo · ${fmtH(hora_inicio)} – ${fmtH(hora_fin)}`;
+        State.turnoColor = color;
+      }
+    }
+  } else {
+    State.turnoAviso = null;
+    State.turnoColor = null;
+  }
+
   // Actualizar último login (best-effort)
   try {
     await API.updateUser(user.id, { ultimo_login: new Date().toISOString() });

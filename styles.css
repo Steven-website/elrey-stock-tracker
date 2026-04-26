@@ -2153,3 +2153,222 @@ main {
     border-color: #78450a;
   }
 }
+
+/* ---- Fila usuario + botón Horario ------------------------------------- */
+.list-item-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+}
+.list-item-wrap > button:first-child { flex: 1; min-width: 0; }
+.btn-horario {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 12px;
+  background: var(--surface-2);
+  border: 1.5px solid var(--border-2);
+  border-radius: var(--radius);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.btn-horario svg { width: 13px; height: 13px; }
+.btn-horario:hover {
+  background: #fffbeb;
+  border-color: var(--accent);
+  color: var(--accent-2);
+}
+
+/* ---- Modal Control de Turnos ----------------------------------------- */
+.horario-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.horario-semana-lbl {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  text-align: center;
+  flex: 1;
+}
+.btn-nav-week {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1.5px solid var(--border-2);
+  color: var(--muted);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.1s, color 0.1s;
+}
+.btn-nav-week:hover { background: var(--border); color: var(--text); }
+
+.horario-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.horario-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 2px;
+  background: var(--surface-2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  min-height: 72px;
+  cursor: default;
+  transition: background 0.12s, border-color 0.12s;
+  position: relative;
+}
+.horario-cell-editable { cursor: pointer; }
+.horario-cell-editable:hover {
+  background: #fffbeb;
+  border-color: var(--accent);
+}
+.horario-cell-hoy {
+  border-color: var(--accent);
+  background: #fffbeb;
+}
+:root[data-theme="dark"] .horario-cell-hoy { background: #2a1f0a; }
+
+.horario-dia {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.horario-fecha {
+  font-size: 14px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  color: var(--text);
+  line-height: 1;
+}
+.horario-cell-hoy .horario-fecha { color: var(--accent-2); }
+
+.turno-pill {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 6px;
+  color: #fff;
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.4;
+  width: 100%;
+}
+.turno-pill-vacio {
+  background: var(--border-2);
+  color: var(--muted-2);
+}
+.turno-pill-libre {
+  background: #d1fae5;
+  color: #065f46;
+}
+:root[data-theme="dark"] .turno-pill-libre { background: #052e16; color: #6ee7b7; }
+
+.horario-horas {
+  font-size: 8px;
+  color: var(--muted-2);
+  font-family: var(--font-mono);
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* Floating picker inside cell */
+.horario-picker {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  background: var(--surface);
+  border: 1.5px solid var(--border-2);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 8px;
+  min-width: 110px;
+  width: max-content;
+}
+.horario-picker-title {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 6px;
+  text-align: center;
+}
+.horario-picker-btn {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  color: var(--text);
+  margin-bottom: 3px;
+  background: transparent;
+  border: none;
+  transition: background 0.1s;
+}
+.horario-picker-btn:last-child { margin-bottom: 0; }
+.horario-picker-btn:hover { background: var(--surface-2); }
+
+/* ---- Mini horario semanal en Perfil ----------------------------------- */
+.horario-mini-row {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+.horario-mini-cell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 2px;
+  background: var(--surface-2);
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  min-width: 0;
+}
+.horario-mini-hoy {
+  border-color: var(--accent);
+  background: #fffbeb;
+}
+:root[data-theme="dark"] .horario-mini-hoy { background: #2a1f0a; }
+.horario-mini-dia {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--muted-2);
+}
+.horario-mini-turno {
+  width: 20px;
+  height: 5px;
+  border-radius: 3px;
+  margin-top: 1px;
+}

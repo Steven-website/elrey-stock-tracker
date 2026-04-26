@@ -22,7 +22,7 @@ import {
   renderScanForSearchModal,
   renderArticulosModal, renderCreateArticuloModal, renderEditArticuloModal,
   renderTiendasModal, renderAuditModal,
-  renderMoverLoteModal
+  renderMoverLoteModal, renderHorarioModal
 } from './modals.js';
 
 // =====================================================================
@@ -57,7 +57,8 @@ export function render() {
       editArticulo:    renderEditArticuloModal,
       tiendas:         renderTiendasModal,
       audit:           renderAuditModal,
-      moverLote:       renderMoverLoteModal
+      moverLote:       renderMoverLoteModal,
+      horario:         renderHorarioModal
     };
     const renderer = map[State.modal];
     if (renderer) root.appendChild(renderer());

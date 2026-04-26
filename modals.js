@@ -760,6 +760,150 @@ async function handleProductScanned(code) {
 }
 
 // =====================================================================
+// HORARIO — calendario semanal de turnos por usuario
+// =====================================================================
+export function renderHorarioModal() {
+  const uid    = State.cache.horarioUsuarioId;
+  const u      = State.cache.horarioUsuario;
+  if (!uid || !u) { closeModal(); return $(`<div></div>`); }
+
+  if (!State.cache.horarioSemanaOffset) State.cache.horarioSemanaOffset = 0;
+  const offset = State.cache.horarioSemanaOffset;
+
+  // Calcular lunes de la semana con offset
+  const hoy = new Date();
+  const lunes = new Date(hoy);
+  lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7) + offset * 7);
+  lunes.setHours(0, 0, 0, 0);
+  const lunesFmt = lunes.toISOString().slice(0, 10);
+
+  const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  const fmtFecha = d => `${d.getDate()}/${d.getMonth() + 1}`;
+
+  // Permisos: admin puede editar operarios, supervisor puede editar contadores
+  const rol = State.user?.rol;
+  const puedeEditar = (rol === 'admin' || rol === 'admin_tienda')
+    ? ['operario', 'contador'].includes(u.rol)
+    : rol === 'supervisor' ? u.rol === 'contador' : false;
+
+  const bodyHtml = `
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; gap:8px;">
+      <button class="btn btn-sm" id="semana-prev">←</button>
+      <div style="text-align:center; font-size:12px; color:var(--muted); font-weight:600;" id="semana-label"></div>
+      <button class="btn btn-sm" id="semana-next">→</button>
+    </div>
+    <div class="horario-grid" id="horario-grid">
+      <div class="empty"><div class="loader"></div></div>
+    </div>
+    ${puedeEditar ? `
+      <div class="banner banner-info" style="border:1px solid; margin-top:14px; font-size:12px;">
+        ${ICON.info}<span>Tocá un día para asignar o cambiar el turno</span>
+      </div>
+    ` : ''}
+  `;
+
+  const modal = modalShell(`Horario · ${escapeHtml(u.nombre)}`, bodyHtml,
+    `<button class="btn btn-block" id="horario-close">Cerrar</button>`);
+  modal.querySelector('#horario-close').onclick = () => closeModal();
+
+  const renderGrid = async () => {
+    const grid = modal.querySelector('#horario-grid');
+    const label = modal.querySelector('#semana-label');
+    grid.innerHTML = '<div class="empty"><div class="loader"></div></div>';
+
+    const dias = await API.getHorarioSemana(uid, lunesFmt);
+    const domingo = new Date(lunes); domingo.setDate(lunes.getDate() + 6);
+    label.textContent = `${fmtFecha(lunes)} – ${fmtFecha(domingo)} · ${lunes.getFullYear()}`;
+
+    grid.innerHTML = '';
+    dias.forEach((d, i) => {
+      const fecha = new Date(lunes);
+      fecha.setDate(lunes.getDate() + i);
+      const esHoy = d.fecha === hoy.toISOString().slice(0, 10);
+      const cell = $(`
+        <div class="horario-cell ${esHoy ? 'horario-cell-hoy' : ''} ${puedeEditar ? 'horario-cell-editable' : ''}">
+          <div class="horario-dia">${DIAS[i]}</div>
+          <div class="horario-fecha">${fmtFecha(fecha)}</div>
+          <div class="horario-turno-pill" id="pill-${i}">
+            ${d.diaLibre
+              ? `<span class="turno-pill" style="background:#ef4444; color:#fff;">Libre</span>`
+              : d.turno
+              ? `<span class="turno-pill" style="background:${d.turno.color}; color:#fff;">${escapeHtml(d.turno.nombre)}</span>`
+              : `<span class="turno-pill turno-pill-vacio">—</span>`
+            }
+          </div>
+          ${d.turno ? `<div class="horario-horas">${String(d.turno.hora_inicio).padStart(2,'0')}:00 – ${d.turno.hora_fin === 24 ? '00:00' : String(d.turno.hora_fin).padStart(2,'0') + ':00'}</div>` : ''}
+        </div>
+      `);
+
+      if (puedeEditar) {
+        cell.onclick = () => abrirPicker(d.fecha, cell, modal, uid);
+      }
+      grid.appendChild(cell);
+    });
+  };
+
+  modal.querySelector('#semana-prev').onclick = () => {
+    State.cache.horarioSemanaOffset--;
+    State.modal = 'horario';
+    render();
+  };
+  modal.querySelector('#semana-next').onclick = () => {
+    State.cache.horarioSemanaOffset++;
+    State.modal = 'horario';
+    render();
+  };
+
+  renderGrid();
+  return modal;
+}
+
+async function abrirPicker(fecha, cell, modal, uid) {
+  const turnos = await API.listTurnos();
+  // Quitar picker previo si existe
+  modal.querySelector('.horario-picker')?.remove();
+
+  const picker = $(`
+    <div class="horario-picker">
+      <div class="horario-picker-title">${fecha}</div>
+      ${turnos.map(t => `
+        <button class="horario-picker-btn" data-turno="${t.id}" style="border-color:${t.color}; color:${t.color};">
+          ${escapeHtml(t.nombre)}
+          <small>${String(t.hora_inicio).padStart(2,'0')}:00 – ${t.hora_fin === 24 ? '00:00' : String(t.hora_fin).padStart(2,'0') + ':00'}</small>
+        </button>
+      `).join('')}
+      <button class="horario-picker-btn" data-turno="libre" style="border-color:#ef4444; color:#ef4444;">
+        Día libre
+      </button>
+      <button class="horario-picker-btn" data-turno="ninguno" style="border-color:var(--muted); color:var(--muted);">
+        Sin asignar
+      </button>
+    </div>
+  `);
+
+  picker.querySelectorAll('.horario-picker-btn').forEach(btn => {
+    btn.onclick = async (e) => {
+      e.stopPropagation();
+      const val = btn.dataset.turno;
+      const turnoId = (val === 'libre' || val === 'ninguno') ? val : parseInt(val);
+      await API.setHorarioDia(uid, fecha, turnoId);
+      toast('Horario actualizado', 'success');
+      picker.remove();
+      State.modal = 'horario';
+      render();
+    };
+  });
+
+  // Cerrar picker al click fuera
+  setTimeout(() => {
+    const cerrar = (e) => { if (!picker.contains(e.target)) { picker.remove(); document.removeEventListener('click', cerrar); } };
+    document.addEventListener('click', cerrar);
+  }, 10);
+
+  cell.appendChild(picker);
+}
+
+// =====================================================================
 // MOVER LOTE — modal de confirmación de traslado masivo
 // =====================================================================
 export function renderMoverLoteModal() {

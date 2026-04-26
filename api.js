@@ -609,5 +609,86 @@ export const API = {
       .eq('id', id).select().single();
     if (error) throw error;
     return data;
+  },
+
+  // -------------------- TURNOS Y HORARIOS --------------------
+  async listTurnos() {
+    if (isDemoMode()) return MOCK.turnos;
+    const { data, error } = await sb.from('turnos').select('*').order('hora_inicio');
+    if (error) throw error;
+    return data;
+  },
+
+  // Devuelve los 7 días de la semana que empieza en fechaInicio (YYYY-MM-DD lunes)
+  async getHorarioSemana(usuarioId, fechaInicio) {
+    const turnos = await this.listTurnos();
+    const days = [];
+    const start = new Date(fechaInicio + 'T00:00:00');
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const fecha = d.toISOString().slice(0, 10);
+      if (isDemoMode()) {
+        const h = MOCK.horarios.find(h => h.usuario_id === usuarioId && h.fecha === fecha);
+        days.push({
+          fecha,
+          asignado: !!h,
+          diaLibre: h ? h.turno_id === null : false,
+          turno: h && h.turno_id ? turnos.find(t => t.id === h.turno_id) || null : null
+        });
+      } else {
+        const { data } = await sb.from('horarios')
+          .select('*, turnos(*)').eq('usuario_id', usuarioId).eq('fecha', fecha).maybeSingle();
+        days.push({
+          fecha,
+          asignado: !!data,
+          diaLibre: data ? data.turno_id === null : false,
+          turno: data?.turnos || null
+        });
+      }
+    }
+    return days;
+  },
+
+  async setHorarioDia(usuarioId, fecha, turnoId) {
+    if (isDemoMode()) {
+      const idx = MOCK.horarios.findIndex(h => h.usuario_id === usuarioId && h.fecha === fecha);
+      if (turnoId === 'libre') {
+        if (idx !== -1) MOCK.horarios[idx].turno_id = null;
+        else MOCK.horarios.push({ id: nextId(MOCK.horarios), usuario_id: usuarioId, fecha, turno_id: null });
+      } else if (turnoId === 'ninguno') {
+        if (idx !== -1) MOCK.horarios.splice(idx, 1);
+      } else {
+        if (idx !== -1) MOCK.horarios[idx].turno_id = turnoId;
+        else MOCK.horarios.push({ id: nextId(MOCK.horarios), usuario_id: usuarioId, fecha, turno_id: turnoId });
+      }
+      return true;
+    }
+    if (turnoId === 'ninguno') {
+      await sb.from('horarios').delete().eq('usuario_id', usuarioId).eq('fecha', fecha);
+    } else {
+      await sb.from('horarios').upsert({
+        usuario_id: usuarioId,
+        fecha,
+        turno_id: turnoId === 'libre' ? null : turnoId
+      }, { onConflict: 'usuario_id,fecha' });
+    }
+    return true;
+  },
+
+  // Devuelve el turno asignado para HOY, null si es día libre, undefined si no hay asignación
+  async checkTurnoHoy(usuarioId) {
+    const hoy = new Date().toISOString().slice(0, 10);
+    if (isDemoMode()) {
+      const h = MOCK.horarios.find(h => h.usuario_id === usuarioId && h.fecha === hoy);
+      if (!h) return undefined;
+      if (h.turno_id === null) return null;
+      return MOCK.turnos.find(t => t.id === h.turno_id) || undefined;
+    }
+    const { data } = await sb.from('horarios')
+      .select('*, turnos(*)').eq('usuario_id', usuarioId).eq('fecha', hoy).maybeSingle();
+    if (!data) return undefined;
+    if (data.turno_id === null) return null;
+    return data.turnos || undefined;
   }
 };
