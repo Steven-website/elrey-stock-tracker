@@ -780,11 +780,12 @@ export function renderHorarioModal() {
   const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   const fmtFecha = d => `${d.getDate()}/${d.getMonth() + 1}`;
 
-  // Permisos: admin puede editar operarios, supervisor puede editar contadores
+  // admin_tienda supervisa operarios; supervisor supervisa contadores; admin ve todo
   const rol = State.user?.rol;
-  const puedeEditar = (rol === 'admin' || rol === 'admin_tienda')
-    ? ['operario', 'contador'].includes(u.rol)
-    : rol === 'supervisor' ? u.rol === 'contador' : false;
+  const puedeEditar =
+    rol === 'admin'            ? ['operario', 'contador'].includes(u.rol) :
+    rol === 'admin_tienda'     ? u.rol === 'operario' :
+    rol === 'supervisor'       ? u.rol === 'contador' : false;
 
   const bodyHtml = `
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; gap:8px;">

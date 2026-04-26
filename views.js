@@ -2079,9 +2079,11 @@ function rolColor(rol) {
 
 function adminUserItem(u) {
   const miRol = State.user?.rol;
-  const puedeVerHorario = ['operario','contador'].includes(u.rol) &&
-    ((miRol === 'admin' || miRol === 'admin_tienda') ||
-     (miRol === 'supervisor' && u.rol === 'contador'));
+  const puedeVerHorario = ['operario','contador'].includes(u.rol) && (
+    miRol === 'admin' ||
+    (miRol === 'admin_tienda' && u.rol === 'operario') ||
+    (miRol === 'supervisor'   && u.rol === 'contador')
+  );
 
   const wrap = $(`<div class="list-item-wrap"></div>`);
   const item = $(`
