@@ -110,12 +110,13 @@ export function renderShell() {
           <div class="brand-sub">// El Rey · Piloto</div>
         </div>
       </div>
-      <div style="display:flex; align-items:center; gap:8px;">
+      <div style="display:flex; align-items:center; gap:6px;">
         <button id="btn-theme" class="btn-theme" title="${isDark ? 'Modo claro' : 'Modo oscuro'}">${isDark ? ICON.sun : ICON.moon}</button>
         <div class="user-chip">
           <span class="dot"></span>
           <span>${escapeHtml(State.user.username)}</span>
         </div>
+        <button id="btn-logout-top" class="btn-logout-top" title="Cerrar sesión">${ICON.logout}</button>
       </div>
     </header>
   `);
@@ -123,13 +124,22 @@ export function renderShell() {
 
   top.querySelector('#btn-theme').onclick = () => {
     const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const metaTheme = document.getElementById('meta-theme-color');
     if (dark) {
       document.documentElement.removeAttribute('data-theme');
       localStorage.setItem('elrey_theme', 'light');
+      if (metaTheme) metaTheme.content = '#f0f2f5';
     } else {
       document.documentElement.setAttribute('data-theme', 'dark');
       localStorage.setItem('elrey_theme', 'dark');
+      if (metaTheme) metaTheme.content = '#0f172a';
     }
+    render();
+  };
+
+  top.querySelector('#btn-logout-top').onclick = () => {
+    if (!confirm('¿Cerrar sesión?')) return;
+    logout();
     render();
   };
 
@@ -143,6 +153,7 @@ export function renderShell() {
   if (!adminOnly && State.view === 'scan')        main.appendChild(renderScanView());
   else if (!adminOnly && State.view === 'buscar') main.appendChild(renderBuscarView());
   else if (!adminOnly && State.view === 'cajas')  main.appendChild(renderCajasView());
+  else if (!adminOnly && State.view === 'perfil') main.appendChild(renderPerfilView());
   else if (State.view === 'mov')                  main.appendChild(renderMovView());
   else if (State.view === 'mas')                  main.appendChild(renderMasView());
   wrap.appendChild(main);
@@ -153,24 +164,32 @@ export function renderShell() {
       <nav class="tabs">
         <button data-v="mov"    class="${State.view==='mov'?'active':''}">${ICON.list}<span>Movimientos</span>${pending > 0 ? `<span class="nav-badge">${pending}</span>` : ''}</button>
         <button data-v="mas"    class="${State.view==='mas'?'active':''}">${ICON.shield}<span>Admin</span></button>
+        <button class="nav-logout" id="nav-logout-btn">${ICON.logout}<span>Cerrar sesión</span></button>
       </nav>
     `)
     : $(`
       <nav class="tabs">
-        <button data-v="scan"   class="${State.view==='scan'?'active':''}">${ICON.scan}<span>Escanear</span></button>
-        <button data-v="buscar" class="${State.view==='buscar'?'active':''}">${ICON.search}<span>Buscar</span></button>
-        <button data-v="cajas"  class="${State.view==='cajas'?'active':''}">${ICON.box}<span>Cajas</span></button>
-        <button data-v="mov"    class="${State.view==='mov'?'active':''}">${ICON.list}<span>Mov.</span>${pending > 0 ? `<span class="nav-badge">${pending}</span>` : ''}</button>
-        <button data-v="mas"    class="${State.view==='mas'?'active':''}">${ICON.more}<span>Más</span></button>
+        <button data-v="scan"   class="${State.view==='scan'  ?'active':''}">${ICON.scan}<span>Escanear</span></button>
+        <button data-v="buscar" class="${State.view==='buscar' ?'active':''}">${ICON.search}<span>Buscar</span></button>
+        <button data-v="cajas"  class="${State.view==='cajas'  ?'active':''}">${ICON.box}<span>Cajas</span></button>
+        <button data-v="mov"    class="${State.view==='mov'    ?'active':''}">${ICON.list}<span>Mov.</span>${pending > 0 ? `<span class="nav-badge">${pending}</span>` : ''}</button>
+        <button data-v="perfil" class="${State.view==='perfil' ?'active':''}">${ICON.user}<span>Perfil</span></button>
+        <button class="nav-logout" id="nav-logout-btn">${ICON.logout}<span>Cerrar sesión</span></button>
       </nav>
     `);
-  nav.querySelectorAll('button').forEach(b => {
+  nav.querySelectorAll('button[data-v]').forEach(b => {
     b.onclick = () => {
       if (scannerActive() && b.dataset.v !== 'scan') stopScanner();
       State.view = b.dataset.v;
       render();
     };
   });
+
+  nav.querySelector('#nav-logout-btn').onclick = () => {
+    if (!confirm('¿Cerrar sesión?')) return;
+    logout();
+    render();
+  };
 
   // Badge de alertas stock en pestaña Más (async, no bloquea render)
   API.getLowStockAlerts(State.config.stockMinimo ?? 10).then(alerts => {
@@ -597,61 +616,84 @@ export function renderMasView() {
   return renderUserMasView();
 }
 
-function renderUserMasView() {
-  const wrap = $(`<div></div>`);
+function renderPerfilView() {
+  const u    = State.user;
   const demo = !State.config.url || !State.config.anonKey;
+  const initial = (u.nombre || u.username || '?').charAt(0).toUpperCase();
 
+  const tiendaNombre = (() => {
+    try {
+      const { MOCK } = window._MOCK || {};
+      return null; // se resuelve async abajo
+    } catch (_) { return null; }
+  })();
+
+  const wrap = $(`<div class="perfil-wrap"></div>`);
   wrap.innerHTML = `
-    <div class="section">
-      <div class="section-title">Sesión</div>
-      <div class="card">
-        <div style="font-weight:600;">${escapeHtml(State.user.nombre)}</div>
-        <div class="meta mono" style="font-size:12px; color:var(--muted); margin-top:4px;">
-          ${escapeHtml(State.user.username)} · ${escapeHtml(State.user.rol)}
+    <div class="perfil-hero">
+      <div class="perfil-avatar">${initial}</div>
+      <div class="perfil-info">
+        <div class="perfil-nombre">${escapeHtml(u.nombre || u.username)}</div>
+        <div class="perfil-meta">
+          <span class="mono">${escapeHtml(u.username)}</span>
+          <span class="pill pill-${rolColor(u.rol)}" style="font-size:10px;">${rolLabel(u.rol)}</span>
         </div>
       </div>
     </div>
-    <div class="section">
-      <div class="section-title">Conexión</div>
-      <button class="setting-row" id="cfg-sup" style="width:100%; text-align:left;">
-        ${ICON.database}
-        <div class="grow">
-          <div style="font-weight:500;">Supabase</div>
-          <div class="meta mono" style="font-size:11px;">
-            ${demo ? 'Modo demo · sin conexión' : 'Conectado · ' + State.config.url.replace(/^https?:\/\//, '')}
-          </div>
+
+    <div class="perfil-cards">
+      <div class="perfil-card">
+        <div class="perfil-card-lbl">Tienda asignada</div>
+        <div class="perfil-card-val" id="perfil-tienda">—</div>
+      </div>
+      <div class="perfil-card">
+        <div class="perfil-card-lbl">Conexión</div>
+        <div class="perfil-card-val">
+          <span class="pill pill-${demo ? 'warn' : 'success'}" style="font-size:11px;">${demo ? 'Demo' : 'Live'}</span>
         </div>
-        <span class="pill pill-${demo ? 'warn' : 'success'}">${demo ? 'demo' : 'live'}</span>
+      </div>
+      <div class="perfil-card">
+        <div class="perfil-card-lbl">Último acceso</div>
+        <div class="perfil-card-val" style="font-size:13px;">${u.ultimo_login ? fmtDate(u.ultimo_login) : '—'}</div>
+      </div>
+      <div class="perfil-card">
+        <div class="perfil-card-lbl">Acceso hasta</div>
+        <div class="perfil-card-val" style="font-size:13px;">${u.acceso_hasta ? new Date(u.acceso_hasta).toLocaleDateString('es-CR') : 'Sin límite'}</div>
+      </div>
+    </div>
+
+    <div class="perfil-actions">
+      <button class="perfil-action-btn" id="btn-cfg-conn">
+        ${ICON.database}
+        <div>
+          <div style="font-weight:600; font-size:13px;">Configurar conexión</div>
+          <div style="font-size:11px; color:var(--muted);">${demo ? 'Conectar Supabase' : State.config.url.replace(/^https?:\/\//, '')}</div>
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-left:auto;flex-shrink:0;color:var(--muted-2);"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+      <button class="perfil-action-btn" id="btn-cfg-pwd">
+        ${ICON.lock}
+        <div>
+          <div style="font-weight:600; font-size:13px;">Cambiar contraseña</div>
+          <div style="font-size:11px; color:var(--muted);">Actualizar tu contraseña de acceso</div>
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-left:auto;flex-shrink:0;color:var(--muted-2);"><path d="M9 18l6-6-6-6"/></svg>
       </button>
     </div>
-    <div class="section">
-      <div class="section-title">Equipo</div>
-      <div id="team-list" class="stack"><div class="empty"><div class="loader"></div></div></div>
-    </div>
-    <div class="section">
-      <button class="btn btn-danger btn-block" id="btn-logout">${ICON.logout} Cerrar sesión</button>
-    </div>
-    <div class="section" style="text-align:center; color:var(--muted); font-size:11px; padding-top:16px;">
-      <div class="mono">// inventario el rey · v0.3.0</div>
+
+    <div style="text-align:center; color:var(--muted-2); font-size:11px; padding:24px 16px 8px; font-family:var(--font-mono);">
+      // inventario el rey · v0.3.0
     </div>
   `;
 
-  wrap.querySelector('#cfg-sup').onclick    = () => { State.modal = 'config'; render(); };
-  wrap.querySelector('#btn-logout').onclick = () => { if (!confirm('¿Cerrar sesión?')) return; logout(); render(); };
+  wrap.querySelector('#btn-cfg-conn').onclick = () => { State.modal = 'config'; render(); };
+  wrap.querySelector('#btn-cfg-pwd').onclick  = () => { State.modal = 'cambiar-password'; render(); };
 
-  API.listUsers().then(users => {
-    const list = wrap.querySelector('#team-list');
-    list.innerHTML = '';
-    users.forEach(u => list.appendChild($(`
-      <div class="list-item">
-        <div class="icon-box">${ICON.user}</div>
-        <div class="grow">
-          <div style="font-weight:500;">${escapeHtml(u.nombre)}</div>
-          <div class="meta"><span class="mono">${escapeHtml(u.username)}</span></div>
-        </div>
-        <span class="pill pill-${rolColor(u.rol)}">${rolLabel(u.rol)}</span>
-      </div>
-    `)));
+  // Resolver nombre de tienda async
+  API.listTiendas().then(tiendas => {
+    const t = tiendas.find(x => x.id === u.tienda_id);
+    const el = wrap.querySelector('#perfil-tienda');
+    if (el) el.textContent = t ? t.nombre : '—';
   }).catch(() => {});
 
   return wrap;

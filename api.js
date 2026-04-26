@@ -21,19 +21,28 @@ export function initSupabase() {
 
 export function getSupabase() { return sb; }
 
+// Devuelve el tienda_id del usuario actual, o null si es admin Master (ve todo)
+function _tid() {
+  if (State.user?.rol === 'admin') return null;
+  return State.user?.tienda_id || null;
+}
+
 // =====================================================================
 // API
 // =====================================================================
 export const API = {
   // -------------------- USUARIOS --------------------
   async listUsers(includeInactive = false) {
+    const tid = _tid();
     if (isDemoMode()) {
-      return includeInactive
-        ? MOCK.usuarios
-        : MOCK.usuarios.filter(u => u.activo);
+      return MOCK.usuarios.filter(u =>
+        (includeInactive || u.activo) &&
+        (!tid || u.tienda_id === tid || u.rol === 'admin')
+      );
     }
     let q = sb.from('usuarios').select('*').order('nombre');
     if (!includeInactive) q = q.eq('activo', true);
+    if (tid) q = q.or(`tienda_id.eq.${tid},rol.eq.admin`);
     const { data, error } = await q;
     if (error) throw error;
     return data;
@@ -112,9 +121,14 @@ export const API = {
   },
 
   async listPosiciones() {
-    if (isDemoMode()) return MOCK.posiciones;
-    const { data, error } = await sb.from('posiciones')
-      .select('id, descripcion, ubicaciones(nombre, tipo)').order('descripcion');
+    const tid = _tid();
+    if (isDemoMode()) {
+      const list = tid ? MOCK.posiciones.filter(p => p.tienda_id === tid) : MOCK.posiciones;
+      return list;
+    }
+    let q = sb.from('posiciones').select('id, descripcion, tienda_id, ubicaciones(nombre, tipo)').order('descripcion');
+    if (tid) q = q.eq('tienda_id', tid);
+    const { data, error } = await q;
     if (error) throw error;
     return data.map(p => ({
       id: p.id, descripcion: p.descripcion,
@@ -158,10 +172,12 @@ export const API = {
 
   // Buscar todas las cajas que contienen un artículo dado
   async findCajasConArticulo(articuloId, includeConsumed = true) {
+    const tid = _tid();
     if (isDemoMode()) {
       return MOCK.cajas
         .filter(c => {
           if (!includeConsumed && c.estado === 'vacia') return false;
+          if (tid && c.tienda_id !== tid) return false;
           return c.contenido?.some(i => i.articulo_id === articuloId);
         })
         .map(c => {
@@ -182,14 +198,14 @@ export const API = {
     }
     let q = sb.from('caja_contenido').select(`
       cantidad_inicial, cantidad_actual,
-      cajas(id, codigo_caja, tipo_caja, estado, fecha_creacion, fecha_consumida,
+      cajas(id, codigo_caja, tipo_caja, tienda_id, estado, fecha_creacion, fecha_consumida,
             posiciones(id, descripcion, ubicaciones(nombre, tipo)),
             caja_contenido(articulo_id, cantidad_inicial, cantidad_actual))
     `).eq('articulo_id', articuloId);
     const { data, error } = await q;
     if (error) throw error;
     return (data || [])
-      .filter(row => row.cajas && (includeConsumed || row.cajas.estado !== 'vacia'))
+      .filter(row => row.cajas && (includeConsumed || row.cajas.estado !== 'vacia') && (!tid || row.cajas.tienda_id === tid))
       .map(row => ({
         id: row.cajas.id,
         codigo_caja: row.cajas.codigo_caja,
@@ -213,9 +229,10 @@ export const API = {
 
   // -------------------- CAJAS --------------------
   async listCajas(includeConsumed = false) {
+    const tid = _tid();
     if (isDemoMode()) {
       return MOCK.cajas
-        .filter(c => includeConsumed || c.estado !== 'vacia')
+        .filter(c => (includeConsumed || c.estado !== 'vacia') && (!tid || c.tienda_id === tid))
         .map(c => ({
           ...c,
           tipo_caja: c.tipo_caja || 'reutilizable',
@@ -224,12 +241,13 @@ export const API = {
         }));
     }
     let q = sb.from('cajas').select(`
-      id, codigo_caja, tipo_caja, fecha_creacion, fecha_consumida, estado,
+      id, codigo_caja, tipo_caja, tienda_id, fecha_creacion, fecha_consumida, estado,
       posiciones(id, descripcion, ubicaciones(nombre, tipo)),
       caja_contenido(articulo_id, cantidad_inicial, cantidad_actual,
                      articulos(sku, descripcion, unidades_por_caja))
     `).order('fecha_creacion', { ascending: false });
     if (!includeConsumed) q = q.neq('estado', 'vacia');
+    if (tid) q = q.eq('tienda_id', tid);
     const { data: cajas, error } = await q;
     if (error) throw error;
     return cajas.map(c => ({
@@ -254,12 +272,13 @@ export const API = {
   },
 
   async createCaja({ codigo_caja, tipo_caja, posicion_id, items, motivo }) {
+    const tid = _tid() || State.user?.tienda_id || 1;
     if (isDemoMode()) {
       const newId = nextId(MOCK.cajas);
       const newCaja = {
         id: newId, codigo_caja,
         tipo_caja: tipo_caja || 'reutilizable',
-        estado: 'activa', posicion_id,
+        estado: 'activa', posicion_id, tienda_id: tid,
         fecha_creacion: new Date().toISOString(),
         contenido: items.map(it => ({
           articulo_id: it.articulo_id,
@@ -289,7 +308,7 @@ export const API = {
       return newCaja;
     }
     const { data: caja, error } = await sb.from('cajas').insert({
-      codigo_caja, posicion_id,
+      codigo_caja, posicion_id, tienda_id: tid,
       tipo_caja: tipo_caja || 'reutilizable',
       creada_por: State.user.id, estado: 'activa'
     }).select().single();
@@ -345,17 +364,33 @@ export const API = {
 
   // -------------------- MOVIMIENTOS --------------------
   async listMovimientos(limit = 50) {
+    const tid = _tid();
     if (isDemoMode()) {
-      return MOCK.movimientos.slice(0, limit).map(m => ({
-        ...m,
-        caja: MOCK.cajas.find(c => c.id === m.caja_id),
-        articulo: MOCK.articulos.find(a => a.id === m.articulo_id),
-        usuario: MOCK.usuarios.find(u => u.id === m.usuario_id)
-      }));
+      return MOCK.movimientos
+        .filter(m => {
+          if (!tid) return true;
+          const caja = MOCK.cajas.find(c => c.id === m.caja_id);
+          return !caja || caja.tienda_id === tid;
+        })
+        .slice(0, limit)
+        .map(m => ({
+          ...m,
+          caja: MOCK.cajas.find(c => c.id === m.caja_id),
+          articulo: MOCK.articulos.find(a => a.id === m.articulo_id),
+          usuario: MOCK.usuarios.find(u => u.id === m.usuario_id)
+        }));
     }
-    const { data, error } = await sb.from('movimientos').select(`
+    let cajaIds = null;
+    if (tid) {
+      const { data: tc } = await sb.from('cajas').select('id').eq('tienda_id', tid);
+      cajaIds = (tc || []).map(c => c.id);
+      if (!cajaIds.length) return [];
+    }
+    let q = sb.from('movimientos').select(`
       *, cajas(codigo_caja), articulos(sku, descripcion), usuarios(nombre, username)
     `).order('creado_at', { ascending: false }).limit(limit);
+    if (cajaIds) q = q.in('caja_id', cajaIds);
+    const { data, error } = await q;
     if (error) throw error;
     return data.map(m => ({
       ...m, caja: m.cajas, articulo: m.articulos, usuario: m.usuarios
@@ -545,6 +580,7 @@ export const API = {
 
   // -------------------- ALERTAS DE STOCK --------------------
   async getLowStockAlerts(threshold = 10, tiendaId = null) {
+    // listCajas ya aplica el filtro de tienda automáticamente según el rol
     const [cajas, arts] = await Promise.all([this.listCajas(false), this.listArticulos()]);
     const filtered = tiendaId
       ? cajas.filter(c => c.tienda_id === tiendaId || c.posicion?.tienda_id === tiendaId)
