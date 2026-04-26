@@ -45,7 +45,8 @@ export const State = {
   scannerActive: false,
   searchQuery: '',
   adminTab: 'inicio',
-  adminTiendaId: null
+  adminTiendaId: null,
+  adminIndicPeriod: 7
 };
 
 // Helper: ¿estamos en modo demo (sin Supabase)?

@@ -747,7 +747,7 @@ function renderAdminMasView() {
     case 'usuarios':    _apUsuarios(content);    break;
     case 'tiendas':     _apTiendas(content);     break;
     case 'ubicaciones': _apUbicaciones(content); break;
-    case 'indicadores': _apProximamente(content, ICON.filter, 'Indicadores globales',   'Gráficos y métricas de inventario global'); break;
+    case 'indicadores': _apIndicadores(content); break;
     case 'config':      _apConfig(content, demo); break;
     case 'auditoria':   _apAuditoria(content);   break;
   }
@@ -1346,6 +1346,256 @@ function _renderUbicacionesBody(el, tiendas, bodegas, pasillos, estantes) {
   };
 
   draw();
+}
+
+// ── Tab: Indicadores globales ─────────────────────────────────────────
+function _apIndicadores(el) {
+  const period = State.adminIndicPeriod || 7;
+
+  el.innerHTML = `
+    <div class="ind-toolbar">
+      <span style="font-size:12px;font-weight:600;color:var(--muted);">Período:</span>
+      ${[1,7,30].map(d => `
+        <button class="ind-period-btn ${period===d?'active':''}" data-days="${d}">
+          ${d===1?'Hoy':d===7?'7 días':'30 días'}
+        </button>
+      `).join('')}
+    </div>
+    <div style="padding:12px;display:flex;flex-direction:column;gap:12px;">
+      <div id="ind-loading" style="display:flex;justify-content:center;padding:32px;"><div class="loader"></div></div>
+    </div>
+  `;
+
+  el.querySelectorAll('.ind-period-btn').forEach(btn => {
+    btn.onclick = () => { State.adminIndicPeriod = parseInt(btn.dataset.days); _apIndicadores(el); };
+  });
+
+  const body = el.querySelector('div[style*="padding:12px"]');
+
+  Promise.all([
+    API.listMovimientos(2000),
+    API.listCajas(true),
+    API.listUsers(true),
+    API.listTiendas(),
+    API.listArticulos()
+  ]).then(([movs, cajas, users, tiendas, arts]) => {
+    body.querySelector('#ind-loading').remove();
+
+    const ahora  = new Date();
+    const desde  = new Date(ahora - period * 86400000);
+    const movsPer = movs.filter(m => new Date(m.creado_at) >= desde);
+    const artMap  = Object.fromEntries(arts.map(a => [a.id, a]));
+    const cajasActivas = cajas.filter(c => c.estado !== 'vacia');
+
+    // ── KPIs globales ──────────────────────────────────────────────────
+    const totalUnd   = cajasActivas.reduce((s,c) => s + (c.unidades_totales||0), 0);
+    const stockCrit  = cajasActivas.filter(c => (c.unidades_totales||0) <= (State.config.stockMinimo??10)).length;
+    const tienActiv  = tiendas.filter(t => t.activa).length;
+    const reductions = movsPer.filter(m => m.tipo === 'reduccion').length;
+    const increases  = movsPer.filter(m => m.tipo === 'aumento').length;
+    const traslados  = movsPer.filter(m => m.tipo === 'traslado').length;
+
+    body.insertAdjacentHTML('beforeend', `
+      <div class="mon-kpi-strip" style="grid-template-columns:repeat(4,1fr);">
+        <div class="mon-kpi"><div class="mon-kpi-val">${totalUnd.toLocaleString()}</div><div class="mon-kpi-lbl">Unidades totales</div></div>
+        <div class="mon-kpi"><div class="mon-kpi-val">${movsPer.length}</div><div class="mon-kpi-lbl">Movimientos</div></div>
+        <div class="mon-kpi"><div class="mon-kpi-val">${tienActiv}</div><div class="mon-kpi-lbl">Tiendas activas</div></div>
+        <div class="mon-kpi ${stockCrit>0?'mon-kpi-warn':''}"><div class="mon-kpi-val">${stockCrit}</div><div class="mon-kpi-lbl">Stock crítico</div></div>
+      </div>
+    `);
+
+    // ── Movimientos por día ────────────────────────────────────────────
+    const days = [];
+    for (let i = Math.min(period, 7) - 1; i >= 0; i--) {
+      const d = new Date(ahora - i * 86400000);
+      const label = d.toLocaleDateString('es-CR', { weekday: 'short', day: 'numeric' });
+      const key   = d.toDateString();
+      const reds  = movs.filter(m => new Date(m.creado_at).toDateString() === key && m.tipo === 'reduccion').length;
+      const aums  = movs.filter(m => new Date(m.creado_at).toDateString() === key && m.tipo === 'aumento').length;
+      days.push({ label, reds, aumsCount: aums, total: reds + aums });
+    }
+    const maxDay = Math.max(1, ...days.map(d => d.total));
+
+    const dayBars = days.map(d => `
+      <div class="ind-day-col">
+        <div class="ind-day-bars">
+          <div class="ind-bar-seg ind-bar-red"  style="height:${Math.round((d.reds/maxDay)*100)}%;" title="Reducciones: ${d.reds}"></div>
+          <div class="ind-bar-seg ind-bar-aum"  style="height:${Math.round((d.aumsCount/maxDay)*100)}%;" title="Aumentos: ${d.aumsCount}"></div>
+        </div>
+        <div class="ind-day-total">${d.total}</div>
+        <div class="ind-day-label">${d.label}</div>
+      </div>
+    `).join('');
+
+    body.insertAdjacentHTML('beforeend', `
+      <div class="dash-card">
+        <div class="dash-card-header">
+          <div class="dash-card-title">${ICON.list} Movimientos por día</div>
+          <div style="display:flex;gap:10px;font-size:11px;color:var(--muted);align-items:center;">
+            <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#f87171;margin-right:3px;"></span>Reduc.</span>
+            <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#4ade80;margin-right:3px;"></span>Aum.</span>
+          </div>
+        </div>
+        <div class="ind-day-chart">${dayBars}</div>
+      </div>
+    `);
+
+    // ── Distribución por tipo ──────────────────────────────────────────
+    const total3 = Math.max(1, reductions + increases + traslados);
+    const pctRed = Math.round((reductions/total3)*100);
+    const pctAum = Math.round((increases/total3)*100);
+    const pctTra = 100 - pctRed - pctAum;
+
+    body.insertAdjacentHTML('beforeend', `
+      <div class="dash-card">
+        <div class="dash-card-header">
+          <div class="dash-card-title">${ICON.filter} Distribución de movimientos</div>
+        </div>
+        <div style="padding:14px 16px;display:flex;flex-direction:column;gap:10px;">
+          ${[
+            { label:'Reducciones', val:reductions, pct:pctRed, color:'#f87171' },
+            { label:'Aumentos',    val:increases,  pct:pctAum, color:'#4ade80' },
+            { label:'Traslados',   val:traslados,  pct:pctTra, color:'#60a5fa' }
+          ].map(r => `
+            <div>
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+                <span style="font-weight:600;color:var(--text);">${r.label}</span>
+                <span style="font-family:var(--font-mono);color:var(--muted);">${r.val} &nbsp;·&nbsp; ${r.pct}%</span>
+              </div>
+              <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden;">
+                <div style="height:100%;width:${r.pct}%;background:${r.color};border-radius:4px;transition:width 0.4s;"></div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `);
+
+    // ── Top tiendas por actividad ──────────────────────────────────────
+    const tienStats = tiendas.map(t => {
+      const cajT  = cajas.filter(c => c.tienda_id === t.id);
+      const cajIds = new Set(cajT.map(c => c.id));
+      const cnt   = movsPer.filter(m => cajIds.has(m.caja_id)).length;
+      return { nombre: t.nombre, cnt };
+    }).sort((a,b) => b.cnt - a.cnt);
+    const maxTienda = Math.max(1, tienStats[0]?.cnt || 1);
+
+    body.insertAdjacentHTML('beforeend', `
+      <div class="dash-card">
+        <div class="dash-card-header">
+          <div class="dash-card-title">${ICON.pin} Tiendas por actividad</div>
+        </div>
+        <div style="padding:10px 16px 14px;">
+          ${tienStats.map(t => `
+            <div class="mon-bar-row">
+              <div class="mon-bar-label"><span style="font-size:13px;font-weight:600;color:var(--text);">${escapeHtml(t.nombre)}</span></div>
+              <div class="mon-bar-wrap" style="width:100px;"><div class="mon-bar" style="width:${Math.round((t.cnt/maxTienda)*100)}%;"></div></div>
+              <span class="mon-bar-val">${t.cnt}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `);
+
+    // ── Top 10 artículos más movidos ───────────────────────────────────
+    const movsPorArt = {};
+    movsPer.forEach(m => {
+      const caja = cajas.find(c => c.id === m.caja_id);
+      if (!caja?.articulo_id) return;
+      movsPorArt[caja.articulo_id] = (movsPorArt[caja.articulo_id]||0) + 1;
+    });
+    const topArts = Object.entries(movsPorArt)
+      .map(([id,cnt]) => ({ art: artMap[id], cnt }))
+      .filter(x => x.art)
+      .sort((a,b) => b.cnt - a.cnt)
+      .slice(0, 10);
+    const maxArt = Math.max(1, topArts[0]?.cnt || 1);
+
+    body.insertAdjacentHTML('beforeend', `
+      <div class="dash-card">
+        <div class="dash-card-header">
+          <div class="dash-card-title">${ICON.package} Top artículos más movidos</div>
+        </div>
+        <div style="padding:10px 16px 14px;">
+          ${topArts.length ? topArts.map(({art,cnt}) => `
+            <div class="mon-bar-row">
+              <div class="mon-bar-label">
+                <span style="font-size:12px;font-weight:600;color:var(--text);">${escapeHtml(art.descripcion||art.sku)}</span>
+                <span style="font-size:10px;color:var(--muted);font-family:var(--font-mono);">${escapeHtml(art.sku)}</span>
+              </div>
+              <div class="mon-bar-wrap"><div class="mon-bar mon-bar-accent" style="width:${Math.round((cnt/maxArt)*100)}%;"></div></div>
+              <span class="mon-bar-val">${cnt}</span>
+            </div>
+          `).join('') : '<div style="font-size:13px;color:var(--muted);padding:4px 0;">Sin movimientos en el período</div>'}
+        </div>
+      </div>
+    `);
+
+    // ── Stock crítico global ───────────────────────────────────────────
+    const criticos = cajasActivas
+      .filter(c => (c.unidades_totales||0) <= (State.config.stockMinimo??10))
+      .map(c => ({ caja:c, art: artMap[c.articulo_id], tienda: tiendas.find(t=>t.id===c.tienda_id) }))
+      .sort((a,b) => (a.caja.unidades_totales||0) - (b.caja.unidades_totales||0))
+      .slice(0, 10);
+
+    body.insertAdjacentHTML('beforeend', `
+      <div class="dash-card">
+        <div class="dash-card-header">
+          <div class="dash-card-title">${ICON.warn} Stock crítico global</div>
+          <span class="pill pill-danger" style="font-size:10px;">${criticos.length} artículo${criticos.length!==1?'s':''}</span>
+        </div>
+        <div style="padding:8px 16px 14px;">
+          ${criticos.length ? criticos.map(({caja,art,tienda}) => `
+            <div class="mon-bar-row">
+              <div class="mon-bar-label">
+                <span style="font-size:12px;font-weight:600;color:var(--text);">${escapeHtml(art?.descripcion||caja.codigo_caja)}</span>
+                <span style="font-size:10px;color:var(--muted);">${escapeHtml(tienda?.nombre||'—')}</span>
+              </div>
+              <div style="font-size:14px;font-weight:800;font-family:var(--font-mono);color:${(caja.unidades_totales||0)===0?'var(--danger)':'var(--warn)'};">
+                ${caja.unidades_totales||0}
+              </div>
+            </div>
+          `).join('') : '<div style="font-size:13px;color:var(--success);padding:4px 0;">Sin artículos en stock crítico</div>'}
+        </div>
+      </div>
+    `);
+
+    // ── Usuarios más activos ───────────────────────────────────────────
+    const movsPorUser = {};
+    movsPer.forEach(m => {
+      if (!m.usuario) return;
+      movsPorUser[m.usuario] = (movsPorUser[m.usuario]||0) + 1;
+    });
+    const topUsers = Object.entries(movsPorUser)
+      .map(([u,cnt]) => ({ user: users.find(x=>x.username===u)||{username:u,nombre:u}, cnt }))
+      .sort((a,b) => b.cnt - a.cnt)
+      .slice(0, 7);
+    const maxUser = Math.max(1, topUsers[0]?.cnt || 1);
+
+    body.insertAdjacentHTML('beforeend', `
+      <div class="dash-card">
+        <div class="dash-card-header">
+          <div class="dash-card-title">${ICON.user} Usuarios más activos</div>
+        </div>
+        <div style="padding:10px 16px 14px;">
+          ${topUsers.length ? topUsers.map(({user,cnt}) => `
+            <div class="mon-bar-row">
+              <div class="mon-bar-label">
+                <span style="font-size:12px;font-weight:600;color:var(--text);">${escapeHtml(user.nombre||user.username)}</span>
+                <span style="font-size:10px;color:var(--muted);font-family:var(--font-mono);">${escapeHtml(user.username)}</span>
+              </div>
+              <div class="mon-bar-wrap"><div class="mon-bar" style="width:${Math.round((cnt/maxUser)*100)}%;background:#a78bfa;"></div></div>
+              <span class="mon-bar-val">${cnt}</span>
+            </div>
+          `).join('') : '<div style="font-size:13px;color:var(--muted);padding:4px 0;">Sin actividad en el período</div>'}
+        </div>
+      </div>
+      <div style="height:16px;"></div>
+    `);
+
+  }).catch(e => {
+    body.innerHTML = `<div class="empty"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
+  });
 }
 
 // ── Tab: Próximamente ─────────────────────────────────────────────────
