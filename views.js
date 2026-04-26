@@ -9,6 +9,7 @@ import { login, logout, isAdmin, isAdminTienda, canExport } from './auth.js';
 import { getPendingCount } from './queue.js';
 import { startScanner, stopScanner, isActive as scannerActive } from './scanner.js';
 import { render, resetInactivityTimer } from './main.js';
+import { getAuditLog, clearAuditLog, AUDIT_TIPO } from './audit.js';
 
 // =====================================================================
 // LOGIN — con usuario + contraseña
@@ -700,18 +701,18 @@ function renderAlertasSection(wrap, tiendaId = null) {
 }
 
 function renderAdminMasView() {
-  const wrap = $(`<div></div>`);
+  const tab  = State.adminTab || 'inicio';
   const demo = !State.config.url || !State.config.anonKey;
   const initial = (State.user.nombre || State.user.username || 'A').charAt(0).toUpperCase();
+  const wrap = $(`<div class="admin-panel"></div>`);
 
   wrap.innerHTML = `
-    <!-- ── Hero ──────────────────────────────────────────── -->
     <div class="dash-hero">
       <div class="dash-hero-left">
         <div class="dash-hero-avatar">${initial}</div>
         <div>
           <div class="dash-hero-title">Panel de administración</div>
-          <div class="dash-hero-sub">${escapeHtml(State.user.nombre)} &nbsp;·&nbsp; ${escapeHtml(State.user.username)}</div>
+          <div class="dash-hero-sub">${escapeHtml(State.user.nombre || State.user.username)} &nbsp;·&nbsp; Master</div>
         </div>
       </div>
       <div class="dash-hero-right">
@@ -720,185 +721,269 @@ function renderAdminMasView() {
       </div>
     </div>
 
-    <!-- ── KPIs ──────────────────────────────────────────── -->
+    <nav class="ap-tabs">
+      <button class="ap-tab ${tab==='inicio'     ?'active':''}" data-tab="inicio">${ICON.list} Inicio</button>
+      <button class="ap-tab ${tab==='usuarios'   ?'active':''}" data-tab="usuarios">${ICON.user} Usuarios</button>
+      <button class="ap-tab ${tab==='tiendas'    ?'active':''}" data-tab="tiendas">${ICON.pin} Tiendas</button>
+      <button class="ap-tab ${tab==='ubicaciones'?'active':''}" data-tab="ubicaciones">${ICON.box} Ubicaciones</button>
+      <button class="ap-tab ${tab==='indicadores'?'active':''}" data-tab="indicadores">${ICON.filter} Indicadores</button>
+      <button class="ap-tab ${tab==='config'     ?'active':''}" data-tab="config">${ICON.settings} Config.</button>
+      <button class="ap-tab ${tab==='auditoria'  ?'active':''}" data-tab="auditoria">${ICON.shield} Auditoría</button>
+    </nav>
+
+    <div class="ap-content" id="ap-content"></div>
+  `;
+
+  wrap.querySelectorAll('.ap-tab').forEach(btn => {
+    btn.onclick = () => { State.adminTab = btn.dataset.tab; render(); };
+  });
+  wrap.querySelector('#btn-logout').onclick = () => {
+    if (!confirm('¿Cerrar sesión?')) return; logout(); render();
+  };
+
+  const content = wrap.querySelector('#ap-content');
+  switch (tab) {
+    case 'inicio':      _apInicio(content);      break;
+    case 'usuarios':    _apUsuarios(content);    break;
+    case 'tiendas':     _apTiendas(content);     break;
+    case 'ubicaciones': _apProximamente(content, ICON.box,    'Gestión de ubicaciones', 'Bodegas, pasillos y estantes por tienda'); break;
+    case 'indicadores': _apProximamente(content, ICON.filter, 'Indicadores globales',   'Gráficos y métricas de inventario global'); break;
+    case 'config':      _apConfig(content, demo); break;
+    case 'auditoria':   _apAuditoria(content);   break;
+  }
+
+  return wrap;
+}
+
+// ── Tab: Inicio (KPIs + alertas) ─────────────────────────────────────
+function _apInicio(el) {
+  el.innerHTML = `
     <div class="dash-kpi-strip" id="kpi-grid">
-      <div style="grid-column:1/-1; display:flex; justify-content:center; padding:24px;">
+      <div style="grid-column:1/-1;display:flex;justify-content:center;padding:24px;">
         <div class="loader"></div>
       </div>
     </div>
-
-    <!-- ── Cuerpo: columna principal + sidebar ───────────── -->
-    <div class="dash-body">
-
-      <div class="dash-main">
-
-        <!-- Alertas de stock -->
-        <div class="dash-card">
-          <div class="dash-card-header">
-            <div class="dash-card-title">${ICON.warn} Alertas de stock bajo</div>
-            <span id="alerta-count" class="pill pill-danger" style="display:none;"></span>
-          </div>
-          <div style="padding:12px 16px;">
-            <div id="alerta-list"><div class="empty" style="padding:16px 0;"><div class="loader"></div></div></div>
-          </div>
+    <div style="padding:12px;">
+      <div class="dash-card">
+        <div class="dash-card-header">
+          <div class="dash-card-title">${ICON.warn} Alertas de stock bajo</div>
+          <span id="alerta-count" class="pill pill-danger" style="display:none;"></span>
         </div>
-
-        <!-- Usuarios -->
-        <div class="dash-card">
-          <div class="dash-card-header">
-            <div class="dash-card-title">${ICON.user} Usuarios del sistema</div>
-            <button class="btn btn-sm btn-primary" id="btn-new-user">${ICON.add} Nuevo usuario</button>
-          </div>
-          <div id="admin-users" style="padding:8px 16px 14px;">
-            <div class="empty"><div class="loader"></div></div>
-          </div>
+        <div style="padding:12px 16px;">
+          <div id="alerta-list"><div class="empty" style="padding:16px 0;"><div class="loader"></div></div></div>
         </div>
-
-      </div>
-
-      <div class="dash-sidebar">
-
-        <!-- Acciones rápidas -->
-        <div class="dash-card">
-          <div class="dash-card-header">
-            <div class="dash-card-title">${ICON.settings} Herramientas</div>
-          </div>
-          <div style="padding:12px;">
-            <button class="dash-action" id="mod-tiendas">
-              <div class="dash-action-icon">${ICON.pin}</div>
-              <div>
-                <div class="dash-action-label">Tiendas</div>
-                <div class="dash-action-sub">Sucursales y stock</div>
-              </div>
-            </button>
-            <button class="dash-action" id="mod-audit">
-              <div class="dash-action-icon">${ICON.list}</div>
-              <div>
-                <div class="dash-action-label">Auditoría</div>
-                <div class="dash-action-sub">Log de sesiones</div>
-              </div>
-            </button>
-            <button class="dash-action" id="cfg-supabase">
-              <div class="dash-action-icon">${ICON.database}</div>
-              <div>
-                <div class="dash-action-label">Base de datos</div>
-                <div class="dash-action-sub">${demo ? 'Modo demo activo' : 'Supabase conectado'}</div>
-              </div>
-            </button>
-          </div>
-        </div>
-
-        <!-- Configuración del sistema -->
-        <div class="dash-card">
-          <div class="dash-card-header">
-            <div class="dash-card-title">${ICON.settings} Configuración</div>
-          </div>
-          <div style="padding:4px 16px 12px;">
-            <div class="dash-cfg-row">
-              <div>
-                <div class="dash-cfg-label">Cierre por inactividad</div>
-                <div class="dash-cfg-sub">Aplica a todos los usuarios</div>
-              </div>
-              <select id="inactivity-sel" class="dash-cfg-select">
-                ${[5, 10, 30].map(m => `<option value="${m}" ${(State.config.inactivityMinutes??10)===m?'selected':''}>${m} min</option>`).join('')}
-                <option value="0" ${(State.config.inactivityMinutes??10)===0?'selected':''}>Nunca</option>
-              </select>
-            </div>
-            <div class="dash-cfg-row">
-              <div>
-                <div class="dash-cfg-label">Umbral stock bajo</div>
-                <div class="dash-cfg-sub">Alerta si stock &lt; X unidades</div>
-              </div>
-              <input id="stock-min-input" type="number" min="0" max="9999"
-                value="${State.config.stockMinimo ?? 10}" class="dash-cfg-input">
-            </div>
-          </div>
-        </div>
-
-        <div style="text-align:center; color:var(--muted-2); font-size:11px; font-family:var(--font-mono); padding:8px 0 16px;">
-          Inventario El Rey · v0.3.0
-        </div>
-
       </div>
     </div>
   `;
 
-  // KPIs — carga asíncrona
   const hoy = new Date().toDateString();
   Promise.all([
-    API.listCajas(false),
-    API.listCajas(true),
-    API.listMovimientos(300),
-    API.listUsers(false),
-    API.listArticulos()
-  ]).then(([activas, todas, movs, usuarios, arts]) => {
+    API.listCajas(false), API.listCajas(true), API.listMovimientos(300),
+    API.listUsers(false), API.listArticulos()
+  ]).then(([activas, todas, movs, usuarios]) => {
     const totalUnidades = activas.reduce((s, c) => s + (c.unidades_totales || 0), 0);
     const stockBajo     = activas.filter(c => (c.unidades_totales || 0) <= (State.config.stockMinimo ?? 10)).length;
     const movsHoy       = movs.filter(m => new Date(m.creado_at).toDateString() === hoy).length;
     const consumidas    = todas.filter(c => c.estado === 'vacia').length;
-    wrap.querySelector('#kpi-grid').innerHTML = `
-      <div class="dash-kpi-card">
-        <div class="dash-kpi-val">${activas.length}</div>
-        <div class="dash-kpi-label">Cajas activas</div>
-      </div>
-      <div class="dash-kpi-card">
-        <div class="dash-kpi-val">${totalUnidades}</div>
-        <div class="dash-kpi-label">Unidades totales</div>
-      </div>
-      <div class="dash-kpi-card ${stockBajo > 0 ? 'dash-kpi-danger' : ''}">
-        <div class="dash-kpi-val">${stockBajo}</div>
-        <div class="dash-kpi-label">Stock bajo</div>
-      </div>
-      <div class="dash-kpi-card">
-        <div class="dash-kpi-val">${movsHoy}</div>
-        <div class="dash-kpi-label">Movimientos hoy</div>
-      </div>
-      <div class="dash-kpi-card">
-        <div class="dash-kpi-val">${usuarios.length}</div>
-        <div class="dash-kpi-label">Usuarios activos</div>
-      </div>
-      <div class="dash-kpi-card">
-        <div class="dash-kpi-val">${consumidas}</div>
-        <div class="dash-kpi-label">Cajas consumidas</div>
-      </div>
+    el.querySelector('#kpi-grid').innerHTML = `
+      <div class="dash-kpi-card"><div class="dash-kpi-val">${activas.length}</div><div class="dash-kpi-label">Cajas activas</div></div>
+      <div class="dash-kpi-card"><div class="dash-kpi-val">${totalUnidades}</div><div class="dash-kpi-label">Unidades totales</div></div>
+      <div class="dash-kpi-card ${stockBajo > 0 ? 'dash-kpi-danger' : ''}"><div class="dash-kpi-val">${stockBajo}</div><div class="dash-kpi-label">Stock bajo</div></div>
+      <div class="dash-kpi-card"><div class="dash-kpi-val">${movsHoy}</div><div class="dash-kpi-label">Movimientos hoy</div></div>
+      <div class="dash-kpi-card"><div class="dash-kpi-val">${usuarios.length}</div><div class="dash-kpi-label">Usuarios activos</div></div>
+      <div class="dash-kpi-card"><div class="dash-kpi-val">${consumidas}</div><div class="dash-kpi-label">Cajas consumidas</div></div>
     `;
   }).catch(() => {
-    wrap.querySelector('#kpi-grid').innerHTML =
-      `<div style="grid-column:1/-1; padding:20px; text-align:center; color:var(--muted);">Error al cargar estadísticas</div>`;
+    el.querySelector('#kpi-grid').innerHTML =
+      `<div style="grid-column:1/-1;padding:20px;text-align:center;color:var(--muted);">Error al cargar estadísticas</div>`;
   });
 
-  // Lista de usuarios
+  renderAlertasSection(el);
+}
+
+// ── Tab: Usuarios ─────────────────────────────────────────────────────
+function _apUsuarios(el) {
+  el.innerHTML = `
+    <div style="padding:12px;">
+      <div class="dash-card">
+        <div class="dash-card-header">
+          <div class="dash-card-title">${ICON.user} Usuarios del sistema</div>
+          <button class="btn btn-sm btn-primary" id="btn-new-user">${ICON.add} Nuevo</button>
+        </div>
+        <div id="admin-users" style="padding:8px 16px 14px;">
+          <div class="empty"><div class="loader"></div></div>
+        </div>
+      </div>
+    </div>
+  `;
+  el.querySelector('#btn-new-user').onclick = () => {
+    State.cache.editingUser = null; State.modal = 'createUser'; render();
+  };
   API.listUsers(true).then(users => {
-    const list = wrap.querySelector('#admin-users');
+    const list = el.querySelector('#admin-users');
     list.innerHTML = '';
     users.forEach(u => list.appendChild(adminUserItem(u)));
   }).catch(e => {
-    wrap.querySelector('#admin-users').innerHTML =
+    el.querySelector('#admin-users').innerHTML =
       `<div class="empty"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
   });
+}
 
-  wrap.querySelector('#mod-tiendas').onclick     = () => { State.modal = 'tiendas';    render(); };
-  wrap.querySelector('#mod-audit').onclick       = () => { State.modal = 'audit';      render(); };
-  wrap.querySelector('#btn-new-user').onclick    = () => { State.cache.editingUser = null; State.modal = 'createUser'; render(); };
-  wrap.querySelector('#cfg-supabase').onclick    = () => { State.modal = 'config';     render(); };
-  wrap.querySelector('#btn-logout').onclick      = () => { if (!confirm('¿Cerrar sesión?')) return; logout(); render(); };
-  wrap.querySelector('#inactivity-sel').onchange = e => {
+// ── Tab: Tiendas ──────────────────────────────────────────────────────
+function _apTiendas(el) {
+  el.innerHTML = `
+    <div style="padding:12px;">
+      <div class="dash-card">
+        <div class="dash-card-header">
+          <div class="dash-card-title">${ICON.pin} Tiendas / Sucursales</div>
+          <button class="btn btn-sm btn-primary" id="btn-ver-tiendas">${ICON.more} Ver detalle</button>
+        </div>
+        <div id="tiendas-list-inline" style="padding:8px 16px 14px;">
+          <div class="empty"><div class="loader"></div></div>
+        </div>
+      </div>
+    </div>
+  `;
+  el.querySelector('#btn-ver-tiendas').onclick = () => { State.modal = 'tiendas'; render(); };
+  API.listTiendas().then(tiendas => {
+    const cont = el.querySelector('#tiendas-list-inline');
+    if (!tiendas.length) { cont.innerHTML = `<div class="empty"><p>Sin tiendas registradas</p></div>`; return; }
+    cont.innerHTML = '';
+    tiendas.forEach(t => cont.appendChild($(`
+      <div class="user-item">
+        <div class="user-info">
+          <div class="user-name">${escapeHtml(t.nombre)}</div>
+          <div class="user-meta">${escapeHtml(t.descripcion || '—')}</div>
+        </div>
+        <span class="pill pill-${t.activa ? 'success' : 'muted'}">${t.activa ? 'Activa' : 'Inactiva'}</span>
+      </div>
+    `)));
+  }).catch(e => {
+    el.querySelector('#tiendas-list-inline').innerHTML =
+      `<div class="empty"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
+  });
+}
+
+// ── Tab: Configuración ────────────────────────────────────────────────
+function _apConfig(el, demo) {
+  el.innerHTML = `
+    <div style="padding:12px;display:flex;flex-direction:column;gap:12px;">
+      <div class="dash-card">
+        <div class="dash-card-header">
+          <div class="dash-card-title">${ICON.settings} Parámetros del sistema</div>
+        </div>
+        <div style="padding:4px 16px 12px;">
+          <div class="dash-cfg-row">
+            <div>
+              <div class="dash-cfg-label">Cierre por inactividad</div>
+              <div class="dash-cfg-sub">Aplica a todos los usuarios</div>
+            </div>
+            <select id="inactivity-sel" class="dash-cfg-select">
+              ${[5,10,30].map(m=>`<option value="${m}" ${(State.config.inactivityMinutes??10)===m?'selected':''}>${m} min</option>`).join('')}
+              <option value="0" ${(State.config.inactivityMinutes??10)===0?'selected':''}>Nunca</option>
+            </select>
+          </div>
+          <div class="dash-cfg-row">
+            <div>
+              <div class="dash-cfg-label">Umbral stock bajo (global)</div>
+              <div class="dash-cfg-sub">Alerta si stock &lt; X unidades</div>
+            </div>
+            <input id="stock-min-input" type="number" min="0" max="9999"
+              value="${State.config.stockMinimo ?? 10}" class="dash-cfg-input">
+          </div>
+        </div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-card-header">
+          <div class="dash-card-title">${ICON.database} Base de datos</div>
+        </div>
+        <div style="padding:12px 16px;">
+          <div style="font-size:13px;color:var(--muted);margin-bottom:12px;">
+            ${demo ? 'Modo demo activo — sin conexión a Supabase' : 'Supabase conectado'}
+          </div>
+          <button class="btn btn-block" id="cfg-supabase">${ICON.settings} Configurar conexión</button>
+        </div>
+      </div>
+      <div style="text-align:center;color:var(--muted-2);font-size:11px;font-family:var(--font-mono);padding:4px 0 8px;">
+        Inventario El Rey · v0.3.0
+      </div>
+    </div>
+  `;
+  el.querySelector('#inactivity-sel').onchange = e => {
     const minutes = parseInt(e.target.value);
     State.config.inactivityMinutes = minutes;
     Storage.set('config', State.config);
     resetInactivityTimer();
     toast(minutes === 0 ? 'Cierre por inactividad desactivado' : `Cierre por inactividad: ${minutes} min`, 'success');
   };
-  wrap.querySelector('#stock-min-input').oninput = e => {
+  el.querySelector('#stock-min-input').oninput = e => {
     const v = parseInt(e.target.value);
     if (isNaN(v) || v < 0) return;
     State.config.stockMinimo = v;
     Storage.set('config', State.config);
-    renderAlertasSection(wrap);
   };
+  el.querySelector('#cfg-supabase').onclick = () => { State.modal = 'config'; render(); };
+}
 
-  renderAlertasSection(wrap);
-  return wrap;
+// ── Tab: Auditoría ────────────────────────────────────────────────────
+function _apAuditoria(el) {
+  const events = getAuditLog(150);
+  el.innerHTML = `
+    <div style="padding:12px;">
+      <div class="dash-card">
+        <div class="dash-card-header">
+          <div class="dash-card-title">${ICON.shield} Log de auditoría</div>
+          <button class="btn btn-sm" id="clear-audit">${ICON.trash} Limpiar</button>
+        </div>
+        <div style="padding:8px 12px 12px;">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">
+            ${events.length} evento${events.length !== 1 ? 's' : ''} registrado${events.length !== 1 ? 's' : ''}
+          </div>
+          <div id="audit-list" class="stack" style="gap:4px;">
+            ${events.length ? '' : '<div class="empty" style="padding:20px 0;"><p>Sin eventos registrados todavía</p></div>'}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  const list = el.querySelector('#audit-list');
+  events.forEach(ev => {
+    const meta = AUDIT_TIPO[ev.tipo] || { label: ev.tipo, color: 'muted' };
+    list.appendChild($(`
+      <div class="audit-item">
+        <div class="audit-left">
+          <span class="pill pill-${meta.color}" style="font-size:10px;padding:2px 7px;">${meta.label}</span>
+          <span class="audit-user">${escapeHtml(ev.username || '—')}</span>
+        </div>
+        <div class="audit-right">
+          <span class="audit-time">${fmtDate(ev.ts)}</span>
+        </div>
+        ${ev.detalles ? `<div class="audit-detail">${escapeHtml(ev.detalles)}</div>` : ''}
+      </div>
+    `));
+  });
+  el.querySelector('#clear-audit').onclick = () => {
+    if (!confirm('¿Borrar todo el historial?')) return;
+    clearAuditLog();
+    _apAuditoria(el);
+  };
+}
+
+// ── Tab: Próximamente ─────────────────────────────────────────────────
+function _apProximamente(el, icon, titulo, desc) {
+  el.innerHTML = `
+    <div style="padding:32px 16px;text-align:center;">
+      <div style="width:56px;height:56px;border-radius:16px;background:var(--surface);border:1px solid var(--border);
+                  display:flex;align-items:center;justify-content:center;margin:0 auto 16px;color:var(--muted);">
+        ${icon}
+      </div>
+      <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px;">${titulo}</div>
+      <div style="font-size:13px;color:var(--muted);">${desc}</div>
+      <div style="margin-top:12px;">
+        <span class="pill pill-info" style="font-size:11px;">Próximamente</span>
+      </div>
+    </div>
+  `;
 }
 
 // =====================================================================

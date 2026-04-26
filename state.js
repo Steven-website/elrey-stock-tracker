@@ -43,7 +43,8 @@ export const State = {
   },
   loading: false,
   scannerActive: false,
-  searchQuery: ''
+  searchQuery: '',
+  adminTab: 'inicio'
 };
 
 // Helper: ¿estamos en modo demo (sin Supabase)?
