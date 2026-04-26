@@ -735,12 +735,18 @@ async function handleProductScanned(code) {
 // =====================================================================
 export function renderPrintQRModal() {
   const code = State.cache.printCode;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&ecc=M&data=${encodeURIComponent(code)}`;
   const bodyHtml = `
     <div class="banner banner-info" style="border:1px solid; margin-bottom:16px;">
       ${ICON.info}<span>Caja creada · imprimí este QR y pegalo en la caja física</span>
     </div>
     <div style="background:#fff; padding:24px; display:flex; flex-direction:column; align-items:center; gap:12px; border:1px solid var(--border);">
-      <div id="qr-canvas" style="width:280px; height:280px;"></div>
+      <img src="${qrUrl}" width="280" height="280" alt="${escapeHtml(code)}"
+           style="display:block; image-rendering:pixelated;"
+           onerror="this.style.display='none'; document.getElementById('qr-fallback').style.display='flex';" />
+      <div id="qr-fallback" style="display:none; width:280px; height:280px; align-items:center; justify-content:center; border:2px dashed #ccc; border-radius:8px; font-size:13px; color:#999; text-align:center; padding:16px;">
+        Sin conexión · usá el código de texto para imprimir el QR
+      </div>
       <div style="font-family:var(--font-mono); font-size:14px; font-weight:600; color:#000; text-align:center; letter-spacing:-0.01em;">
         ${escapeHtml(code)}
       </div>
@@ -758,19 +764,6 @@ export function renderPrintQRModal() {
     <button class="btn btn-primary grow" id="done-print">Listo</button>
   `;
   const modal = modalShell('QR de la caja', bodyHtml, footerHtml);
-
-  setTimeout(() => {
-    const el = modal.querySelector('#qr-canvas');
-    if (el && window.QRCode) {
-      el.innerHTML = '';
-      new window.QRCode(el, {
-        text: code,
-        width: 280, height: 280,
-        colorDark: '#000000', colorLight: '#ffffff',
-        correctLevel: window.QRCode.CorrectLevel.M
-      });
-    }
-  }, 80);
 
   modal.querySelector('#copy-code').onclick = () => {
     navigator.clipboard?.writeText(code).then(

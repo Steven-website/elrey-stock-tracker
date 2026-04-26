@@ -4,7 +4,7 @@
 //             network-only para llamadas a Supabase
 // =====================================================================
 
-const CACHE = 'elrey-v13';
+const CACHE = 'elrey-v14';
 
 const SHELL = [
   './',
@@ -45,12 +45,13 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // Network-only: Supabase, CDN, Google Fonts
+  // Network-only: Supabase, CDN, Google Fonts, QR API
   if (
     url.hostname.includes('supabase.co') ||
     url.hostname.includes('cdn.jsdelivr.net') ||
     url.hostname.includes('fonts.googleapis.com') ||
-    url.hostname.includes('fonts.gstatic.com')
+    url.hostname.includes('fonts.gstatic.com') ||
+    url.hostname.includes('api.qrserver.com')
   ) return;
 
   // Cache-first para archivos locales de la app
