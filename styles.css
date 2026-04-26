@@ -1176,6 +1176,34 @@ main {
   font-size: 12px;
 }
 
+/* ---- Chips de nota rápida --------------------------------------------- */
+.note-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.note-chip {
+  padding: 7px 12px;
+  background: var(--surface);
+  border: 1.5px solid var(--border-2);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  white-space: nowrap;
+}
+
+.note-chip:active,
+.note-chip.active {
+  background: #fffbeb;
+  border-color: var(--accent);
+  color: var(--accent-2);
+  font-weight: 600;
+}
+
 /* ---- Monitor de tiendas ------------------------------------------------ */
 .tienda-selector {
   display: flex;

@@ -226,8 +226,13 @@ function renderQtyModal(tipo) {
       `}
     </select>
 
-    <label class="label" style="margin-top:16px;">Notas (opcional)</label>
-    <textarea class="textarea" id="notas" rows="2" placeholder="Ej: factura #1234"></textarea>
+    <label class="label" style="margin-top:16px;">Nota rápida (opcional)</label>
+    <div class="note-chips" id="note-chips">
+      ${(isReduce
+        ? ['Con factura', 'Sin factura', 'Devolución cliente', 'Daño visible', 'Conteo corregido']
+        : ['Factura incluida', 'Mercadería revisada', 'Conteo corregido', 'Proveedor directo']
+      ).map(n => `<button class="note-chip" data-note="${n}">${n}</button>`).join('')}
+    </div>
   `;
 
   const footerHtml = `
@@ -256,11 +261,19 @@ function renderQtyModal(tipo) {
     input.value = Math.min(max, parseInt(input.value || '1') + 1);
     modal.querySelectorAll('.qty-shortcut').forEach(b => b.classList.remove('active'));
   };
+  modal.querySelectorAll('.note-chip').forEach(btn => {
+    btn.onclick = () => {
+      const active = btn.classList.contains('active');
+      modal.querySelectorAll('.note-chip').forEach(b => b.classList.remove('active'));
+      if (!active) btn.classList.add('active');
+    };
+  });
+
   modal.querySelector('#cancel-act').onclick = () => { State.modal = 'box'; render(); };
   modal.querySelector('#confirm-act').onclick = async () => {
     const cantidad = Math.max(1, Math.min(max, parseInt(input.value || '1')));
     const motivo = modal.querySelector('#motivo').value;
-    const notas = modal.querySelector('#notas').value;
+    const notas = modal.querySelector('.note-chip.active')?.dataset.note || '';
     try {
       const result = await API.createMovimiento({
         tipo, caja_id: c.id, articulo_id: artId,
@@ -306,8 +319,12 @@ export function renderMoveModal() {
     <select class="select" id="new-pos">
       <option value="">— Selecciona —</option>
     </select>
-    <label class="label" style="margin-top:16px;">Notas (opcional)</label>
-    <textarea class="textarea" id="notas" rows="2"></textarea>
+    <label class="label" style="margin-top:16px;">Nota rápida (opcional)</label>
+    <div class="note-chips" id="note-chips">
+      ${['Reorganización', 'Temporada', 'Solicitud encargado', 'Más espacio', 'Corrección'].map(n =>
+        `<button class="note-chip" data-note="${n}">${n}</button>`
+      ).join('')}
+    </div>
   `;
   const footerHtml = `
     <button class="btn grow" id="cancel-move">Cancelar</button>
@@ -326,11 +343,19 @@ export function renderMoveModal() {
     });
   });
 
+  modal.querySelectorAll('.note-chip').forEach(btn => {
+    btn.onclick = () => {
+      const active = btn.classList.contains('active');
+      modal.querySelectorAll('.note-chip').forEach(b => b.classList.remove('active'));
+      if (!active) btn.classList.add('active');
+    };
+  });
+
   modal.querySelector('#cancel-move').onclick = () => { State.modal = 'box'; render(); };
   modal.querySelector('#confirm-move').onclick = async () => {
     const newPosId = parseInt(modal.querySelector('#new-pos').value);
     if (!newPosId) { toast('Selecciona una ubicación', 'error'); return; }
-    const notas = modal.querySelector('#notas').value;
+    const notas = modal.querySelector('.note-chip.active')?.dataset.note || '';
     try {
       await API.createMovimiento({
         tipo: 'trasladar_caja', caja_id: c.id,
@@ -391,6 +416,7 @@ export function renderHistoryModal() {
             <div class="history-time">
               ${escapeHtml(m.usuario?.nombre || '—')} · ${fmtDateTime(m.creado_at)}
               ${m.motivo ? ' · ' + escapeHtml(m.motivo) : ''}
+              ${m.notas ? `<div style="margin-top:2px; font-style:italic; color:var(--text-2);">"${escapeHtml(m.notas)}"</div>` : ''}
             </div>
           </div>
         </div>
