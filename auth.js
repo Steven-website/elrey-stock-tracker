@@ -81,7 +81,7 @@ export function canManageStoreUsers() { return ['admin', 'admin_tienda'].include
 export function isSupervisor()  { return ['admin', 'admin_tienda', 'supervisor'].includes(State.user?.rol); }
 export function isContador()    { return ['admin', 'admin_tienda', 'supervisor', 'contador'].includes(State.user?.rol); }
 export function isAuditor()     { return ['admin', 'auditor'].includes(State.user?.rol); }
-export function canExport()     { return State.user?.rol !== 'operario'; }
+export function canExport()     { return !['operario', 'contador'].includes(State.user?.rol); }
 
 // Validación de username (alfanumérico, sin espacios)
 export function isValidUsername(u) {
