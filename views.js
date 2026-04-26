@@ -829,65 +829,193 @@ function _apUsuarios(el) {
   });
 }
 
-// ── Tab: Tiendas (solo lectura + activar/desactivar — vienen del ERP) ──
+// ── Tab: Tiendas — monitor de salud por sucursal ──────────────────────
 function _apTiendas(el) {
-  const load = () => {
+  el.innerHTML = `<div style="display:flex;justify-content:center;padding:32px;"><div class="loader"></div></div>`;
+
+  Promise.all([
+    API.listTiendas(),
+    API.listMovimientos(1000),
+    API.listCajas(true),
+    API.listUsers(true),
+    API.listArticulos()
+  ]).then(([tiendas, movs, cajas, users, arts]) => {
+    if (!tiendas.length) { el.innerHTML = `<div class="empty" style="padding:40px;"><p>Sin tiendas cargadas desde ERP</p></div>`; return; }
+
+    if (!State.adminTiendaId || !tiendas.find(t => t.id === State.adminTiendaId)) {
+      State.adminTiendaId = tiendas[0].id;
+    }
+
+    const artMap = Object.fromEntries(arts.map(a => [a.id, a]));
+
+    // ── Selector de tienda ──
+    const selectorHtml = tiendas.map(t => `
+      <button class="tienda-sel-btn ${t.id === State.adminTiendaId ? 'active' : ''}" data-tid="${t.id}">
+        ${escapeHtml(t.nombre)}
+      </button>
+    `).join('');
+
     el.innerHTML = `
-      <div style="padding:12px;">
-        <div class="dash-card">
-          <div class="dash-card-header">
-            <div class="dash-card-title">${ICON.pin} Tiendas / Sucursales</div>
-            <span style="font-size:11px;color:var(--muted);">Cargadas desde ERP</span>
-          </div>
-          <div id="tiendas-list-inline" style="padding:8px 16px 14px;">
-            <div class="empty"><div class="loader"></div></div>
-          </div>
-        </div>
-      </div>
+      <div class="tienda-selector">${selectorHtml}</div>
+      <div id="tienda-detail" style="padding:12px;display:flex;flex-direction:column;gap:12px;"></div>
     `;
 
-    Promise.all([API.listTiendas(), API.listCajas(false), API.listUsers(true)])
-      .then(([tiendas, cajas, usuarios]) => {
-        const cont = el.querySelector('#tiendas-list-inline');
-        if (!tiendas.length) { cont.innerHTML = `<div class="empty"><p>Sin tiendas cargadas</p></div>`; return; }
-        cont.innerHTML = '';
-        tiendas.forEach(t => {
-          const cajasT   = cajas.filter(c => c.tienda_id === t.id);
-          const unidades = cajasT.reduce((s, c) => s + (c.unidades_totales || 0), 0);
-          const usrs     = usuarios.filter(u => u.tienda_id === t.id);
-          const row = $(`
-            <div class="tienda-row">
-              <div class="tienda-row-info">
-                <div class="tienda-row-name">${escapeHtml(t.nombre)}</div>
-                <div class="tienda-row-meta">
-                  <span class="mono">${escapeHtml(t.codigo || '')}</span>
-                  &nbsp;·&nbsp; ${cajasT.length} cajas &nbsp;·&nbsp; ${unidades} uds &nbsp;·&nbsp; ${usrs.length} usuarios
-                </div>
-              </div>
-              <button class="btn btn-sm ${t.activa ? 'btn-danger-ghost' : 'btn-success-ghost'} tienda-toggle"
-                data-id="${t.id}" data-activa="${t.activa}">
-                ${t.activa ? 'Desactivar' : 'Activar'}
-              </button>
+    el.querySelectorAll('.tienda-sel-btn').forEach(btn => {
+      btn.onclick = () => { State.adminTiendaId = parseInt(btn.dataset.tid); _renderTiendaDetail(detail, tiendas, movs, cajas, users, artMap); };
+    });
+
+    const detail = el.querySelector('#tienda-detail');
+    _renderTiendaDetail(detail, tiendas, movs, cajas, users, artMap);
+  }).catch(e => {
+    el.innerHTML = `<div class="empty" style="padding:40px;"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
+  });
+}
+
+function _renderTiendaDetail(el, tiendas, movs, cajas, users, artMap) {
+  const t       = tiendas.find(x => x.id === State.adminTiendaId);
+  const cajasT  = cajas.filter(c => c.tienda_id === t.id);
+  const usersT  = users.filter(u => u.tienda_id === t.id);
+  const cajasIds = new Set(cajasT.map(c => c.id));
+  const movsT   = movs.filter(m => cajasIds.has(m.caja_id));
+
+  const ahora   = new Date();
+  const hoy     = ahora.toDateString();
+  const semana  = new Date(ahora - 7 * 86400000);
+  const movsHoy = movsT.filter(m => new Date(m.creado_at).toDateString() === hoy);
+  const movsSem = movsT.filter(m => new Date(m.creado_at) >= semana);
+  const stockBajoT = cajasT.filter(c => (c.unidades_totales || 0) <= (State.config.stockMinimo ?? 10) && c.estado !== 'vacia');
+  const ultimaMov  = movsT.length ? movsT.reduce((a, b) => new Date(a.creado_at) > new Date(b.creado_at) ? a : b) : null;
+  const usrsInactivos = usersT.filter(u => {
+    const last = movsT.filter(m => m.usuario_id === u.id || m.usuario === u.username);
+    return last.length === 0;
+  });
+
+  // ── Conteo de movimientos por caja ──
+  const movsPorCaja = cajasT.map(c => ({
+    caja: c,
+    total: movsT.filter(m => m.caja_id === c.id).length
+  })).sort((a, b) => b.total - a.total).slice(0, 5);
+  const maxCaja = movsPorCaja[0]?.total || 1;
+
+  // ── Conteo de movimientos por producto ──
+  const movsPorArt = {};
+  movsT.forEach(m => {
+    const caja = cajasT.find(c => c.id === m.caja_id);
+    if (!caja) return;
+    const artId = caja.articulo_id;
+    if (!artId) return;
+    movsPorArt[artId] = (movsPorArt[artId] || 0) + 1;
+  });
+  const topArts = Object.entries(movsPorArt)
+    .map(([id, total]) => ({ art: artMap[id], total }))
+    .filter(x => x.art)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 5);
+  const maxArt = topArts[0]?.total || 1;
+
+  // ── Alertas ──
+  const alertas = [];
+  if (movsHoy.length === 0 && cajasT.length > 0) alertas.push({ nivel: 'danger', msg: 'Sin actividad hoy' });
+  if (usrsInactivos.length) alertas.push({ nivel: 'warn', msg: `${usrsInactivos.length} usuario${usrsInactivos.length>1?'s':''} sin movimientos registrados` });
+  if (stockBajoT.length) alertas.push({ nivel: 'warn', msg: `${stockBajoT.length} caja${stockBajoT.length>1?'s':''} con stock bajo` });
+  if (!cajasT.length) alertas.push({ nivel: 'danger', msg: 'Sin cajas activas en esta tienda' });
+
+  el.innerHTML = `
+    <!-- KPIs -->
+    <div class="mon-kpi-strip">
+      <div class="mon-kpi"><div class="mon-kpi-val">${movsHoy.length}</div><div class="mon-kpi-lbl">Movs. hoy</div></div>
+      <div class="mon-kpi"><div class="mon-kpi-val">${movsSem.length}</div><div class="mon-kpi-lbl">Movs. semana</div></div>
+      <div class="mon-kpi"><div class="mon-kpi-val">${usersT.length}</div><div class="mon-kpi-lbl">Usuarios</div></div>
+      <div class="mon-kpi"><div class="mon-kpi-val">${cajasT.filter(c=>c.estado!=='vacia').length}</div><div class="mon-kpi-lbl">Cajas activas</div></div>
+      <div class="mon-kpi ${stockBajoT.length?'mon-kpi-warn':''}"><div class="mon-kpi-val">${stockBajoT.length}</div><div class="mon-kpi-lbl">Stock bajo</div></div>
+    </div>
+
+    <!-- Última actividad -->
+    <div class="dash-card">
+      <div class="dash-card-header">
+        <div class="dash-card-title">${ICON.history} Última actividad</div>
+        <span class="pill pill-${alertas.length ? 'danger' : 'success'}" style="font-size:10px;">
+          ${alertas.length ? alertas.length + ' alerta' + (alertas.length>1?'s':'') : 'Todo normal'}
+        </span>
+      </div>
+      <div style="padding:10px 16px;">
+        <div style="font-size:13px;color:var(--muted);margin-bottom:${alertas.length?'10px':'0'};">
+          ${ultimaMov ? `Último movimiento: <strong style="color:var(--text);">${fmtDate(ultimaMov.creado_at)}</strong> por <strong style="color:var(--text);">${escapeHtml(ultimaMov.usuario || '—')}</strong>` : 'Sin movimientos registrados'}
+        </div>
+        ${alertas.map(a => `
+          <div class="mon-alerta mon-alerta-${a.nivel}">${a.nivel === 'danger' ? ICON.warn : ICON.info} ${a.msg}</div>
+        `).join('')}
+      </div>
+    </div>
+
+    <!-- Usuarios -->
+    <div class="dash-card">
+      <div class="dash-card-header">
+        <div class="dash-card-title">${ICON.user} Usuarios asignados (${usersT.length})</div>
+      </div>
+      <div style="padding:8px 16px 12px;">
+        ${usersT.length ? usersT.map(u => {
+          const movsU = movsT.filter(m => m.usuario === u.username).length;
+          return `<div class="mon-user-row">
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--text);">${escapeHtml(u.nombre || u.username)}</div>
+              <div style="font-size:11px;color:var(--muted);">${escapeHtml(u.rol)} · ${escapeHtml(u.username)}</div>
             </div>
-          `);
-          row.querySelector('.tienda-toggle').onclick = async btn => {
-            const activa = btn.currentTarget.dataset.activa === 'true';
-            const accion = activa ? 'desactivar' : 'activar';
-            if (!confirm(`¿${accion.charAt(0).toUpperCase()+accion.slice(1)} la tienda "${t.nombre}"?`)) return;
-            try {
-              await API.updateTienda(t.id, { activa: !activa });
-              toast(`Tienda ${!activa ? 'activada' : 'desactivada'}`, 'success');
-              load();
-            } catch(e) { toast('Error: ' + e.message, 'error'); }
-          };
-          cont.appendChild(row);
-        });
-      }).catch(e => {
-        el.querySelector('#tiendas-list-inline').innerHTML =
-          `<div class="empty"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
-      });
-  };
-  load();
+            <div style="text-align:right;">
+              <div style="font-size:13px;font-weight:700;font-family:var(--font-mono);color:var(--text);">${movsU}</div>
+              <div style="font-size:10px;color:var(--muted);">movimientos</div>
+            </div>
+          </div>`;
+        }).join('') : '<div class="empty" style="padding:12px 0;"><p>Sin usuarios asignados</p></div>'}
+      </div>
+    </div>
+
+    <!-- Top cajas por movimientos -->
+    <div class="dash-card">
+      <div class="dash-card-header">
+        <div class="dash-card-title">${ICON.box} Top cajas por movimientos</div>
+      </div>
+      <div style="padding:10px 16px 14px;">
+        ${movsPorCaja.length ? movsPorCaja.map(({ caja, total }) => {
+          const pct = Math.round((total / maxCaja) * 100);
+          const art = artMap[caja.articulo_id];
+          return `<div class="mon-bar-row">
+            <div class="mon-bar-label">
+              <span style="font-size:12px;font-weight:600;color:var(--text);">${escapeHtml(art?.descripcion || caja.codigo_caja)}</span>
+              <span style="font-size:10px;color:var(--muted);font-family:var(--font-mono);">${escapeHtml(caja.codigo_caja.slice(-10))}</span>
+            </div>
+            <div class="mon-bar-wrap"><div class="mon-bar" style="width:${pct}%;"></div></div>
+            <span class="mon-bar-val">${total}</span>
+          </div>`;
+        }).join('') : '<div style="font-size:13px;color:var(--muted);padding:4px 0;">Sin movimientos registrados</div>'}
+      </div>
+    </div>
+
+    <!-- Top productos por movimientos -->
+    <div class="dash-card">
+      <div class="dash-card-header">
+        <div class="dash-card-title">${ICON.package} Top productos por movimientos</div>
+      </div>
+      <div style="padding:10px 16px 14px;">
+        ${topArts.length ? topArts.map(({ art, total }) => {
+          const pct = Math.round((total / maxArt) * 100);
+          return `<div class="mon-bar-row">
+            <div class="mon-bar-label">
+              <span style="font-size:12px;font-weight:600;color:var(--text);">${escapeHtml(art.descripcion || art.sku)}</span>
+              <span style="font-size:10px;color:var(--muted);font-family:var(--font-mono);">${escapeHtml(art.sku)}</span>
+            </div>
+            <div class="mon-bar-wrap"><div class="mon-bar mon-bar-accent" style="width:${pct}%;"></div></div>
+            <span class="mon-bar-val">${total}</span>
+          </div>`;
+        }).join('') : '<div style="font-size:13px;color:var(--muted);padding:4px 0;">Sin datos de productos</div>'}
+      </div>
+    </div>
+  `;
+
+  // Actualizar selector activo
+  el.closest('.ap-content')?.querySelectorAll('.tienda-sel-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.dataset.tid) === State.adminTiendaId);
+  });
 }
 
 // ── Tab: Configuración ────────────────────────────────────────────────
