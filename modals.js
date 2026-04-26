@@ -191,7 +191,10 @@ function renderQtyModal(tipo) {
   const bodyHtml = `
     <div class="box-header">
       <div class="qty-row-name" style="margin-bottom:4px;">${escapeHtml(art.descripcion)}</div>
-      <div class="meta mono" style="font-size:11px; color:var(--muted);">${escapeHtml(c.codigo_caja)}</div>
+      <div class="meta mono" style="font-size:11px; color:var(--muted); display:flex; gap:10px;">
+        <span>Cod. Rey: <strong>${escapeHtml(art.sku || '—')}</strong></span>
+        <span>${escapeHtml(c.codigo_caja)}</span>
+      </div>
       <div style="margin-top:10px; font-family:var(--font-mono);">
         ${isReduce ? `Disponible: <strong style="color:var(--accent);">${item.cantidad_actual}</strong>` : `Capacidad libre: <strong style="color:var(--accent);">${max}</strong>`}
       </div>
