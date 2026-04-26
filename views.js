@@ -99,6 +99,7 @@ export function renderLogin() {
 export function renderShell() {
   const wrap = $(`<div style="display:contents;"></div>`);
 
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   const top = $(`
     <header class="topbar">
       <div class="brand">
@@ -108,13 +109,28 @@ export function renderShell() {
           <div class="brand-sub">// El Rey · Piloto</div>
         </div>
       </div>
-      <div class="user-chip">
-        <span class="dot"></span>
-        <span>${escapeHtml(State.user.username)}</span>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <button id="btn-theme" class="btn-theme" title="${isDark ? 'Modo claro' : 'Modo oscuro'}">${isDark ? ICON.sun : ICON.moon}</button>
+        <div class="user-chip">
+          <span class="dot"></span>
+          <span>${escapeHtml(State.user.username)}</span>
+        </div>
       </div>
     </header>
   `);
   wrap.appendChild(top);
+
+  top.querySelector('#btn-theme').onclick = () => {
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (dark) {
+      document.documentElement.removeAttribute('data-theme');
+      localStorage.setItem('elrey_theme', 'light');
+    } else {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      localStorage.setItem('elrey_theme', 'dark');
+    }
+    render();
+  };
 
   // Admin Master solo ve vistas administrativas
   const adminOnly = isAdmin();
@@ -686,108 +702,131 @@ function renderAlertasSection(wrap, tiendaId = null) {
 function renderAdminMasView() {
   const wrap = $(`<div></div>`);
   const demo = !State.config.url || !State.config.anonKey;
+  const initial = (State.user.nombre || State.user.username || 'A').charAt(0).toUpperCase();
 
   wrap.innerHTML = `
-    <div class="admin-header">
-      <div>
-        <div class="admin-header-title">${ICON.shield} Panel de administración</div>
-        <div class="admin-header-sub">${escapeHtml(State.user.nombre)} · ${escapeHtml(State.user.username)}</div>
-      </div>
-      ${demo ? '<span class="pill pill-warn">demo</span>' : '<span class="pill pill-success">live</span>'}
-    </div>
-
-    <div class="section">
-      <div class="section-title">Resumen general</div>
-      <div class="kpi-grid" id="kpi-grid">
-        <div class="kpi-card" style="grid-column:1/-1; justify-content:center;">
-          <div class="loader"></div>
+    <!-- ── Hero ──────────────────────────────────────────── -->
+    <div class="dash-hero">
+      <div class="dash-hero-left">
+        <div class="dash-hero-avatar">${initial}</div>
+        <div>
+          <div class="dash-hero-title">Panel de administración</div>
+          <div class="dash-hero-sub">${escapeHtml(State.user.nombre)} &nbsp;·&nbsp; ${escapeHtml(State.user.username)}</div>
         </div>
       </div>
-    </div>
-
-    <div class="section" style="padding-top:0;">
-      <div class="section-title" style="display:flex; align-items:center; gap:6px;">
-        ${ICON.warn} Alertas de stock bajo
-        <span id="alerta-count" class="pill pill-danger" style="display:none; margin-left:4px;"></span>
-      </div>
-      <div id="alerta-list" class="stack">
-        <div class="empty"><div class="loader"></div></div>
+      <div class="dash-hero-right">
+        <span class="pill pill-${demo ? 'warn' : 'success'}">${demo ? 'Demo' : 'Live'}</span>
+        <button class="btn btn-sm dash-logout-btn" id="btn-logout">${ICON.logout} Salir</button>
       </div>
     </div>
 
-    <div class="section" style="padding-top:0;">
-      <div class="section-title">Módulos</div>
-      <div class="admin-modules">
-        <button class="admin-module" id="mod-articulos">
-          ${ICON.package}
-          <span>Artículos</span>
-          <small>Catálogo de productos</small>
-        </button>
-        <button class="admin-module" id="mod-tiendas">
-          ${ICON.pin}
-          <span>Tiendas</span>
-          <small>Sucursales y stock</small>
-        </button>
-        <button class="admin-module" id="mod-audit">
-          ${ICON.list}
-          <span>Auditoría</span>
-          <small>Log de sesiones</small>
-        </button>
+    <!-- ── KPIs ──────────────────────────────────────────── -->
+    <div class="dash-kpi-strip" id="kpi-grid">
+      <div style="grid-column:1/-1; display:flex; justify-content:center; padding:24px;">
+        <div class="loader"></div>
       </div>
     </div>
 
-    <div class="section" style="padding-top:0;">
-      <div class="section-title">
-        Usuarios <span class="pill pill-warn" style="margin-left:6px;">${ICON.shield} admin</span>
-      </div>
-      <button class="btn btn-primary btn-block" id="btn-new-user" style="margin-bottom:8px;">
-        ${ICON.add} Crear usuario nuevo
-      </button>
-      <div id="admin-users" class="stack">
-        <div class="empty"><div class="loader"></div></div>
-      </div>
-    </div>
+    <!-- ── Cuerpo: columna principal + sidebar ───────────── -->
+    <div class="dash-body">
 
-    <div class="section" style="padding-top:0;">
-      <div class="section-title">Sistema</div>
-      <button class="setting-row" id="cfg-supabase" style="width:100%; text-align:left; margin-bottom:4px;">
-        ${ICON.database}
-        <div class="grow">
-          <div style="font-weight:500;">Supabase</div>
-          <div class="meta mono" style="font-size:11px;">
-            ${demo ? 'Modo demo · sin conexión real' : 'Conectado · ' + State.config.url.replace(/^https?:\/\//, '')}
+      <div class="dash-main">
+
+        <!-- Alertas de stock -->
+        <div class="dash-card">
+          <div class="dash-card-header">
+            <div class="dash-card-title">${ICON.warn} Alertas de stock bajo</div>
+            <span id="alerta-count" class="pill pill-danger" style="display:none;"></span>
+          </div>
+          <div style="padding:12px 16px;">
+            <div id="alerta-list"><div class="empty" style="padding:16px 0;"><div class="loader"></div></div></div>
           </div>
         </div>
-        <span class="pill pill-${demo ? 'warn' : 'success'}">${demo ? 'demo' : 'live'}</span>
-      </button>
-      <div class="setting-row" style="margin-bottom:4px;">
-        ${ICON.lock}
-        <div class="grow">
-          <div style="font-weight:500;">Cierre por inactividad</div>
-          <div class="meta" style="font-size:11px;">Aplica a todos los usuarios</div>
-        </div>
-        <select id="inactivity-sel" style="background:var(--surface-2); border:1px solid var(--border); color:var(--text); padding:4px 8px; border-radius:6px; font-size:12px; font-family:var(--font-mono);">
-          ${[5, 10, 30].map(m => `<option value="${m}" ${(State.config.inactivityMinutes??10)===m?'selected':''}>${m} min</option>`).join('')}
-          <option value="0" ${(State.config.inactivityMinutes??10)===0?'selected':''}>Nunca</option>
-        </select>
-      </div>
-      <div class="setting-row" style="margin-bottom:4px;">
-        ${ICON.warn}
-        <div class="grow">
-          <div style="font-weight:500;">Umbral stock bajo</div>
-          <div class="meta" style="font-size:11px;">Alerta si el total de un artículo es menor a X unidades</div>
-        </div>
-        <input id="stock-min-input" type="number" min="0" max="9999" value="${State.config.stockMinimo ?? 10}"
-          style="width:60px; background:var(--surface-2); border:1px solid var(--border); color:var(--text); padding:4px 6px; border-radius:6px; font-size:13px; font-family:var(--font-mono); text-align:center;">
-      </div>
-      <button class="btn btn-danger btn-block" id="btn-logout" style="margin-top:8px;">
-        ${ICON.logout} Cerrar sesión
-      </button>
-    </div>
 
-    <div class="section" style="text-align:center; color:var(--muted); font-size:11px; padding-top:16px;">
-      <div class="mono">// inventario el rey · v0.3.0</div>
-      <div style="margin-top:4px;">Piloto interno · panel admin</div>
+        <!-- Usuarios -->
+        <div class="dash-card">
+          <div class="dash-card-header">
+            <div class="dash-card-title">${ICON.user} Usuarios del sistema</div>
+            <button class="btn btn-sm btn-primary" id="btn-new-user">${ICON.add} Nuevo usuario</button>
+          </div>
+          <div id="admin-users" style="padding:8px 16px 14px;">
+            <div class="empty"><div class="loader"></div></div>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="dash-sidebar">
+
+        <!-- Acciones rápidas -->
+        <div class="dash-card">
+          <div class="dash-card-header">
+            <div class="dash-card-title">${ICON.settings} Herramientas</div>
+          </div>
+          <div style="padding:12px;">
+            <button class="dash-action" id="mod-articulos">
+              <div class="dash-action-icon">${ICON.package}</div>
+              <div>
+                <div class="dash-action-label">Artículos</div>
+                <div class="dash-action-sub">Catálogo de productos</div>
+              </div>
+            </button>
+            <button class="dash-action" id="mod-tiendas">
+              <div class="dash-action-icon">${ICON.pin}</div>
+              <div>
+                <div class="dash-action-label">Tiendas</div>
+                <div class="dash-action-sub">Sucursales y stock</div>
+              </div>
+            </button>
+            <button class="dash-action" id="mod-audit">
+              <div class="dash-action-icon">${ICON.list}</div>
+              <div>
+                <div class="dash-action-label">Auditoría</div>
+                <div class="dash-action-sub">Log de sesiones</div>
+              </div>
+            </button>
+            <button class="dash-action" id="cfg-supabase">
+              <div class="dash-action-icon">${ICON.database}</div>
+              <div>
+                <div class="dash-action-label">Base de datos</div>
+                <div class="dash-action-sub">${demo ? 'Modo demo activo' : 'Supabase conectado'}</div>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <!-- Configuración del sistema -->
+        <div class="dash-card">
+          <div class="dash-card-header">
+            <div class="dash-card-title">${ICON.settings} Configuración</div>
+          </div>
+          <div style="padding:4px 16px 12px;">
+            <div class="dash-cfg-row">
+              <div>
+                <div class="dash-cfg-label">Cierre por inactividad</div>
+                <div class="dash-cfg-sub">Aplica a todos los usuarios</div>
+              </div>
+              <select id="inactivity-sel" class="dash-cfg-select">
+                ${[5, 10, 30].map(m => `<option value="${m}" ${(State.config.inactivityMinutes??10)===m?'selected':''}>${m} min</option>`).join('')}
+                <option value="0" ${(State.config.inactivityMinutes??10)===0?'selected':''}>Nunca</option>
+              </select>
+            </div>
+            <div class="dash-cfg-row">
+              <div>
+                <div class="dash-cfg-label">Umbral stock bajo</div>
+                <div class="dash-cfg-sub">Alerta si stock &lt; X unidades</div>
+              </div>
+              <input id="stock-min-input" type="number" min="0" max="9999"
+                value="${State.config.stockMinimo ?? 10}" class="dash-cfg-input">
+            </div>
+          </div>
+        </div>
+
+        <div style="text-align:center; color:var(--muted-2); font-size:11px; font-family:var(--font-mono); padding:8px 0 16px;">
+          Inventario El Rey · v0.3.0
+        </div>
+
+      </div>
     </div>
   `;
 
@@ -801,38 +840,38 @@ function renderAdminMasView() {
     API.listArticulos()
   ]).then(([activas, todas, movs, usuarios, arts]) => {
     const totalUnidades = activas.reduce((s, c) => s + (c.unidades_totales || 0), 0);
-    const stockBajo     = activas.filter(c => (c.unidades_totales || 0) <= 5).length;
+    const stockBajo     = activas.filter(c => (c.unidades_totales || 0) <= (State.config.stockMinimo ?? 10)).length;
     const movsHoy       = movs.filter(m => new Date(m.creado_at).toDateString() === hoy).length;
     const consumidas    = todas.filter(c => c.estado === 'vacia').length;
     wrap.querySelector('#kpi-grid').innerHTML = `
-      <div class="kpi-card">
-        <div class="kpi-val">${activas.length}</div>
-        <div class="kpi-label">Cajas activas</div>
+      <div class="dash-kpi-card">
+        <div class="dash-kpi-val">${activas.length}</div>
+        <div class="dash-kpi-label">Cajas activas</div>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-val">${totalUnidades}</div>
-        <div class="kpi-label">Unidades totales</div>
+      <div class="dash-kpi-card">
+        <div class="dash-kpi-val">${totalUnidades}</div>
+        <div class="dash-kpi-label">Unidades totales</div>
       </div>
-      <div class="kpi-card ${stockBajo > 0 ? 'kpi-warn' : ''}">
-        <div class="kpi-val">${stockBajo}</div>
-        <div class="kpi-label">Stock bajo</div>
+      <div class="dash-kpi-card ${stockBajo > 0 ? 'dash-kpi-danger' : ''}">
+        <div class="dash-kpi-val">${stockBajo}</div>
+        <div class="dash-kpi-label">Stock bajo</div>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-val">${movsHoy}</div>
-        <div class="kpi-label">Movimientos hoy</div>
+      <div class="dash-kpi-card">
+        <div class="dash-kpi-val">${movsHoy}</div>
+        <div class="dash-kpi-label">Movimientos hoy</div>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-val">${usuarios.length}</div>
-        <div class="kpi-label">Usuarios activos</div>
+      <div class="dash-kpi-card">
+        <div class="dash-kpi-val">${usuarios.length}</div>
+        <div class="dash-kpi-label">Usuarios activos</div>
       </div>
-      <div class="kpi-card">
-        <div class="kpi-val">${arts.length}</div>
-        <div class="kpi-label">Artículos</div>
+      <div class="dash-kpi-card">
+        <div class="dash-kpi-val">${consumidas}</div>
+        <div class="dash-kpi-label">Cajas consumidas</div>
       </div>
     `;
   }).catch(() => {
     wrap.querySelector('#kpi-grid').innerHTML =
-      `<div class="kpi-card" style="grid-column:1/-1;"><div class="kpi-label">Error al cargar estadísticas</div></div>`;
+      `<div style="grid-column:1/-1; padding:20px; text-align:center; color:var(--muted);">Error al cargar estadísticas</div>`;
   });
 
   // Lista de usuarios
@@ -858,7 +897,6 @@ function renderAdminMasView() {
     resetInactivityTimer();
     toast(minutes === 0 ? 'Cierre por inactividad desactivado' : `Cierre por inactividad: ${minutes} min`, 'success');
   };
-
   wrap.querySelector('#stock-min-input').oninput = e => {
     const v = parseInt(e.target.value);
     if (isNaN(v) || v < 0) return;
@@ -868,7 +906,6 @@ function renderAdminMasView() {
   };
 
   renderAlertasSection(wrap);
-
   return wrap;
 }
 

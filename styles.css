@@ -26,6 +26,20 @@
   --radius:    8px;
 }
 
+/* ---- Dark theme -------------------------------------------------------- */
+:root[data-theme="dark"] {
+  --bg:        #0f172a;
+  --surface:   #1e293b;
+  --surface-2: #243048;
+  --border:    #334155;
+  --border-2:  #475569;
+  --text:      #f1f5f9;
+  --muted:     #94a3b8;
+  --muted-2:   #64748b;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3);
+}
+
 /* ---- Reset ------------------------------------------------------------ */
 *, *::before, *::after { box-sizing: border-box; }
 * { margin: 0; padding: 0; }
@@ -1159,6 +1173,224 @@ main {
   font-size: 12px;
 }
 
+/* ---- Theme toggle button ---------------------------------------------- */
+.btn-theme {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1.5px solid var(--border);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.btn-theme svg { width: 16px; height: 16px; }
+.btn-theme:hover { background: var(--border); color: var(--text); }
+
+/* =====================================================================
+   ADMIN DASHBOARD — dash-* components
+===================================================================== */
+
+/* Hero header (always dark for contrast) */
+.dash-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 20px 16px;
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  color: #f8fafc;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.dash-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.dash-hero-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #0f172a;
+  font-size: 20px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dash-hero-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #f8fafc;
+  line-height: 1.2;
+}
+
+.dash-hero-sub {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.dash-hero-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.dash-logout-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: #f8fafc;
+  border-radius: var(--radius);
+}
+.dash-logout-btn:hover { background: rgba(255,255,255,0.14); }
+
+/* KPI strip */
+.dash-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.dash-kpi-card {
+  padding: 14px 10px;
+  text-align: center;
+  border-right: 1px solid var(--border);
+}
+.dash-kpi-card:nth-child(3n) { border-right: none; }
+
+.dash-kpi-val {
+  font-size: 22px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  line-height: 1.1;
+  color: var(--text);
+}
+
+.dash-kpi-label {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.dash-kpi-danger .dash-kpi-val { color: var(--danger); }
+
+/* Body layout */
+.dash-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg);
+}
+
+.dash-main    { display: flex; flex-direction: column; gap: 12px; }
+.dash-sidebar { display: flex; flex-direction: column; gap: 12px; }
+
+/* Cards */
+.dash-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.dash-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  gap: 8px;
+}
+
+.dash-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+.dash-card-title svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+/* Action buttons in sidebar */
+.dash-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 8px;
+  border-radius: var(--radius);
+  text-align: left;
+  transition: background 0.1s;
+}
+.dash-action:hover  { background: var(--surface-2); }
+.dash-action:active { background: var(--border); }
+
+.dash-action-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #fffbeb;
+  border: 1px solid #fef08a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--accent-2);
+}
+:root[data-theme="dark"] .dash-action-icon {
+  background: #2a1f0a;
+  border-color: #78450a;
+}
+.dash-action-icon svg { width: 17px; height: 17px; }
+
+.dash-action-label { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.2; }
+.dash-action-sub   { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+/* Config rows */
+.dash-cfg-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.dash-cfg-row:last-child { border-bottom: none; }
+
+.dash-cfg-label { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.2; }
+.dash-cfg-sub   { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+.dash-cfg-select,
+.dash-cfg-input {
+  font-size: 13px;
+  font-family: var(--font-mono);
+  background: var(--surface-2);
+  border: 1.5px solid var(--border-2);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  color: var(--text);
+  min-width: 88px;
+}
+.dash-cfg-input { width: 72px; text-align: right; }
+
 /* =====================================================================
    RESPONSIVE — Diseño escritorio (≥ 768 px)
 ===================================================================== */
@@ -1308,5 +1540,30 @@ main {
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+
+  /* Dashboard: two-column layout on desktop */
+  .dash-kpi-strip {
+    grid-template-columns: repeat(6, 1fr);
+  }
+  .dash-kpi-card:nth-child(3n) { border-right: 1px solid var(--border); }
+  .dash-kpi-card:last-child     { border-right: none; }
+
+  .dash-body {
+    flex-direction: row;
+    align-items: flex-start;
+    padding: 20px;
+    gap: 20px;
+  }
+  .dash-main    { flex: 1; min-width: 0; }
+  .dash-sidebar { width: 280px; flex-shrink: 0; }
+}
+
+/* ---- Dark mode desktop overrides ------------------------------------- */
+@media (min-width: 768px) {
+  :root[data-theme="dark"] body { background: #070e1a; }
+  :root[data-theme="dark"] .tabs button.active {
+    background: #1f1700;
+    border-color: #78450a;
   }
 }
