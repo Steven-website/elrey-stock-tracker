@@ -1648,6 +1648,22 @@ main {
 .perfil-action-btn svg { width: 20px; height: 20px; flex-shrink: 0; color: var(--accent); }
 .perfil-action-btn:hover { background: var(--surface-2); border-color: var(--border-2); }
 
+.perfil-qr-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.perfil-qr-lbl { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.perfil-qr-wrap canvas { border-radius: 8px; display: block; }
+.perfil-qr-sub { font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+
 /* ---- Topbar icon buttons (theme + logout) ------------------------------ */
 .btn-theme, .btn-logout-top {
   width: 34px;

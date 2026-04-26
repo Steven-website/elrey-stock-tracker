@@ -653,6 +653,12 @@ function renderPerfilView() {
       </div>
     </div>
 
+    <div class="perfil-qr-wrap">
+      <div class="perfil-qr-lbl">Mi código QR</div>
+      <canvas id="perfil-qr-canvas"></canvas>
+      <div class="perfil-qr-sub mono">${escapeHtml(u.username)}</div>
+    </div>
+
     <div class="perfil-actions">
       <button class="perfil-action-btn" id="btn-cfg-pwd">
         ${ICON.lock}
@@ -670,6 +676,17 @@ function renderPerfilView() {
   `;
 
   wrap.querySelector('#btn-cfg-pwd').onclick = () => { State.modal = 'cambiar-password'; render(); };
+
+  // Generar QR del usuario
+  setTimeout(() => {
+    const canvas = wrap.querySelector('#perfil-qr-canvas');
+    if (canvas && window.QRCode) {
+      QRCode.toCanvas(canvas, u.username, {
+        width: 180, margin: 2,
+        color: { dark: '#1e293b', light: '#ffffff' }
+      });
+    }
+  }, 50);
 
   // Resolver nombre de tienda async
   API.listTiendas().then(tiendas => {
