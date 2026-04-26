@@ -2,7 +2,7 @@
 // scanner.js — envoltura mínima sobre html5-qrcode
 // =====================================================================
 
-import { toast } from './utils.js';
+import { toast, feedback } from './utils.js';
 
 let _scanner = null;
 let _onScanCb = null;
@@ -23,7 +23,7 @@ export function startScanner(elementId, onScan, options = {}) {
       aspectRatio: options.aspectRatio || 1.0
     },
     (decoded) => {
-      if (navigator.vibrate) navigator.vibrate(60);
+      feedback('ok');
       const cb = _onScanCb;
       stopScanner();
       if (cb) cb(decoded);

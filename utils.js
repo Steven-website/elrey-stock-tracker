@@ -87,6 +87,49 @@ export async function hashPassword(plain) {
     .join('');
 }
 
+// ---- Feedback sensorial (beep + vibración) ----
+let _audioCtx = null;
+function _getCtx() {
+  if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (_audioCtx.state === 'suspended') _audioCtx.resume();
+  return _audioCtx;
+}
+
+export function feedback(type = 'ok') {
+  // Vibración
+  if (navigator.vibrate) {
+    navigator.vibrate(type === 'ok' ? 60 : [120, 60, 120]);
+  }
+  // Beep generado por Web Audio API
+  try {
+    const ctx = _getCtx();
+    const now = ctx.currentTime;
+    if (type === 'ok') {
+      // Dos tonos ascendentes: A5 → D6
+      [[880, 0, 0.08], [1174, 0.07, 0.14]].forEach(([freq, t, dur]) => {
+        const osc  = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = 'sine'; osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.22, now + t);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + t + dur);
+        osc.start(now + t); osc.stop(now + t + dur + 0.01);
+        osc.onended = () => { try { gain.disconnect(); } catch (_) {} };
+      });
+    } else {
+      // Tono bajo de error
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sawtooth'; osc.frequency.value = 260;
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc.start(now); osc.stop(now + 0.36);
+      osc.onended = () => { try { gain.disconnect(); } catch (_) {} };
+    }
+  } catch (_) { /* silencioso si el navegador no soporta audio */ }
+}
+
 // ---- Generar código de caja único ----
 export function generateBoxCode(tiendaCodigo = 'A01') {
   // Caracteres sin ambigüedad (sin O/0, I/1, etc.)

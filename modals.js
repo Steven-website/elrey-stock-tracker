@@ -5,7 +5,7 @@
 import { State, Storage } from './state.js';
 import { API, initSupabase } from './api.js';
 import { MOCK } from './mock.js';
-import { ICON, $, escapeHtml, fmtDate, fmtDateTime, toast, generateBoxCode } from './utils.js';
+import { ICON, $, escapeHtml, fmtDate, fmtDateTime, toast, generateBoxCode, feedback } from './utils.js';
 import { isValidUsername, isValidPassword, isAdminTienda } from './auth.js';
 import { startScanner, stopScanner } from './scanner.js';
 import { render } from './main.js';
@@ -1079,6 +1079,7 @@ async function handleSearchScanned(code) {
   try {
     const articulo = await API.findArticuloByCode(code);
     if (!articulo) {
+      feedback('error');
       toast(`No encontré el producto "${code}"`, 'error');
       State.modal = null;
       render();

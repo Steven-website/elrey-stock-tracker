@@ -4,7 +4,7 @@
 
 import { State, Storage } from './state.js';
 import { API } from './api.js';
-import { ICON, $, escapeHtml, fmtDate, toast } from './utils.js';
+import { ICON, $, escapeHtml, fmtDate, toast, feedback } from './utils.js';
 import { login, logout, isAdmin, isAdminTienda } from './auth.js';
 import { startScanner, stopScanner, isActive as scannerActive } from './scanner.js';
 import { render } from './main.js';
@@ -150,10 +150,10 @@ export function renderShell() {
 export async function handleCodeScanned(code) {
   const cleaned = (code || '').trim();
   if (!cleaned) return;
-  toast('Código leído: ' + cleaned, 'success');
   try {
     const caja = await API.getCajaByCode(cleaned);
     if (!caja) {
+      feedback('error');
       toast('Caja no encontrada en el sistema', 'error');
       render();
       return;
@@ -162,6 +162,7 @@ export async function handleCodeScanned(code) {
     State.modal = 'box';
     render();
   } catch (e) {
+    feedback('error');
     toast(e.message, 'error');
     render();
   }
