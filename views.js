@@ -748,17 +748,10 @@ function renderPerfilView() {
       </div>
     </div>
 
-    ${State.turnoAviso ? `
-      <div class="banner ${State.turnoColor ? 'banner-info' : 'banner-warn'}" style="border:1px solid; margin:0 16px 4px;">
-        ${ICON.info}
-        <span style="font-size:12px;">${escapeHtml(State.turnoAviso)}</span>
-      </div>
-    ` : ''}
-
-    ${['operario','contador'].includes(u.rol) ? `
-      <div class="section-title" style="padding:16px 16px 8px;">Mi horario esta semana</div>
-      <div id="perfil-horario-mini" style="padding:0 16px 8px;">
-        <div class="empty"><div class="loader"></div></div>
+    ${State.ubicacionAviso ? `
+      <div class="banner ${State.ubicacionAviso.tipo === 'ok' ? 'banner-info' : 'banner-warn'}" style="border:1px solid; margin:0 16px 4px;">
+        ${State.ubicacionAviso.tipo === 'ok' ? ICON.pin : ICON.warn}
+        <span style="font-size:12px;">${escapeHtml(State.ubicacionAviso.texto)}</span>
       </div>
     ` : ''}
 
@@ -786,32 +779,6 @@ function renderPerfilView() {
     const el = wrap.querySelector('#perfil-tienda');
     if (el) el.textContent = t ? t.nombre : '—';
   }).catch(() => {});
-
-  // Mini-horario semanal en perfil
-  if (['operario','contador'].includes(u.rol)) {
-    const miniEl = wrap.querySelector('#perfil-horario-mini');
-    if (miniEl) {
-      const hoy = new Date();
-      const lunes = new Date(hoy);
-      lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
-      const lunesFmt = lunes.toISOString().slice(0, 10);
-      const DIAS = ['L','M','X','J','V','S','D'];
-      API.getHorarioSemana(u.id, lunesFmt).then(dias => {
-        miniEl.innerHTML = `<div class="horario-mini-row">
-          ${dias.map((d, i) => {
-            const esHoy = d.fecha === hoy.toISOString().slice(0, 10);
-            const bg = d.diaLibre ? '#ef4444' : d.turno ? d.turno.color : 'var(--surface)';
-            const txt = d.diaLibre ? 'L' : d.turno ? d.turno.nombre.slice(0,3) : '—';
-            const color = (d.diaLibre || d.turno) ? '#fff' : 'var(--muted)';
-            return `<div class="horario-mini-cell ${esHoy ? 'horario-mini-hoy' : ''}" style="background:${bg}; color:${color};">
-              <div class="horario-mini-dia">${DIAS[i]}</div>
-              <div class="horario-mini-turno">${txt}</div>
-            </div>`;
-          }).join('')}
-        </div>`;
-      }).catch(() => { miniEl.innerHTML = ''; });
-    }
-  }
 
   return wrap;
 }
@@ -2078,16 +2045,8 @@ function rolColor(rol) {
 }
 
 function adminUserItem(u) {
-  const miRol = State.user?.rol;
-  const puedeVerHorario = ['operario','contador'].includes(u.rol) && (
-    miRol === 'admin' ||
-    (miRol === 'admin_tienda' && u.rol === 'operario') ||
-    (miRol === 'supervisor'   && u.rol === 'contador')
-  );
-
-  const wrap = $(`<div class="list-item-wrap"></div>`);
   const item = $(`
-    <button class="list-item" style="text-align:left; flex:1; ${u.activo ? '' : 'opacity:0.5;'}">
+    <button class="list-item" style="text-align:left; ${u.activo ? '' : 'opacity:0.5;'}">
       <div class="icon-box">${ICON.user}</div>
       <div class="grow">
         <div style="font-weight:500;">${escapeHtml(u.nombre)} ${!u.activo ? '<span style="color:var(--muted); font-weight:400; font-size:11px;">(inactivo)</span>' : ''}</div>
@@ -2104,21 +2063,7 @@ function adminUserItem(u) {
     State.modal = 'editUser';
     render();
   };
-  wrap.appendChild(item);
-
-  if (puedeVerHorario) {
-    const btnH = $(`<button class="btn btn-sm" style="margin-left:4px; padding:6px 10px; white-space:nowrap;" title="Ver horario">${ICON.schedule} Horario</button>`);
-    btnH.onclick = (e) => {
-      e.stopPropagation();
-      State.cache.horarioUsuarioId = u.id;
-      State.cache.horarioUsuario = u;
-      State.cache.horarioSemanaOffset = 0;
-      State.modal = 'horario';
-      render();
-    };
-    wrap.appendChild(btnH);
-  }
-  return wrap;
+  return item;
 }
 
 // =====================================================================

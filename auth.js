@@ -7,6 +7,29 @@ import { API } from './api.js';
 import { hashPassword } from './utils.js';
 import { logEvent } from './audit.js';
 
+// ---- Helpers de geolocalización ----
+function _haversineMetros(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const toRad = x => x * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+}
+
+function _checkUbicacion(lat, lng, radio) {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) { resolve({ ok: true, motivo: 'no-gps' }); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const dist = _haversineMetros(pos.coords.latitude, pos.coords.longitude, lat, lng);
+        resolve({ ok: dist <= radio, dist, radio });
+      },
+      () => resolve({ ok: true, motivo: 'denegado' }),
+      { timeout: 8000, maximumAge: 60000 }
+    );
+  });
+}
+
 // Intenta autenticar al usuario contra el password_hash almacenado
 export async function login(username, password) {
   const cleanU = (username || '').trim().toUpperCase();
@@ -23,38 +46,31 @@ export async function login(username, password) {
     logEvent('login_fail', { username: cleanU, detalles: 'Contraseña incorrecta' });
     throw new Error('Usuario o contraseña incorrectos');
   }
-  // Validar turno para operario y contador
-  const ROLES_CON_TURNO = ['operario', 'contador'];
-  if (ROLES_CON_TURNO.includes(user.rol)) {
-    const turnoHoy = await API.checkTurnoHoy(user.id);
+
+  // Verificar rango de ubicación para operario y contador
+  const ROLES_UBICACION = ['operario', 'contador'];
+  if (ROLES_UBICACION.includes(user.rol)) {
+    const tienda = await API.getTiendaById(user.tienda_id);
     const isDemoMode = !State.config.url || !State.config.anonKey;
-    if (turnoHoy === null) {
-      // Día libre explícito
-      if (!isDemoMode) {
-        logEvent('login_fail', { username: cleanU, detalles: 'Día libre' });
-        throw new Error('Hoy es tu día libre. No tenés acceso programado.');
-      }
-      State.turnoAviso = 'Hoy es tu día libre (en producción el acceso estaría bloqueado).';
-    } else if (turnoHoy !== undefined) {
-      // Hay turno asignado — verificar hora actual
-      const hora = new Date().getHours();
-      const { nombre, hora_inicio, hora_fin, color } = turnoHoy;
-      const dentro = hora_fin === 24 ? hora >= hora_inicio : (hora >= hora_inicio && hora < hora_fin);
-      const fmtH = h => `${String(h === 24 ? 0 : h).padStart(2, '0')}:00`;
-      if (!dentro) {
+    if (tienda?.lat && tienda?.lng) {
+      const radio = tienda.radio_metros ?? 300;
+      const ub = await _checkUbicacion(tienda.lat, tienda.lng, radio);
+      if (!ub.ok) {
         if (!isDemoMode) {
-          logEvent('login_fail', { username: cleanU, detalles: `Fuera de turno ${nombre}` });
-          throw new Error(`Tu turno es ${nombre} (${fmtH(hora_inicio)} – ${fmtH(hora_fin)}). Intentá en ese horario.`);
+          logEvent('login_fail', { username: cleanU, detalles: `Fuera de rango: ${ub.dist}m` });
+          throw new Error(`Estás a ${ub.dist} m de la tienda. Solo podés ingresar dentro de un radio de ${ub.radio} m.`);
         }
-        State.turnoAviso = `Turno ${nombre}: ${fmtH(hora_inicio)} – ${fmtH(hora_fin)} (en producción el acceso estaría bloqueado fuera de ese horario).`;
+        State.ubicacionAviso = { tipo: 'warn', texto: `Fuera de rango: ${ub.dist} m de la tienda (máx ${ub.radio} m). En producción el acceso estaría bloqueado.` };
+      } else if (ub.dist !== undefined) {
+        State.ubicacionAviso = { tipo: 'ok', texto: `Ubicación verificada · a ${ub.dist} m de la tienda` };
       } else {
-        State.turnoAviso = `Turno ${nombre} activo · ${fmtH(hora_inicio)} – ${fmtH(hora_fin)}`;
-        State.turnoColor = color;
+        State.ubicacionAviso = null;
       }
+    } else {
+      State.ubicacionAviso = null;
     }
   } else {
-    State.turnoAviso = null;
-    State.turnoColor = null;
+    State.ubicacionAviso = null;
   }
 
   // Actualizar último login (best-effort)

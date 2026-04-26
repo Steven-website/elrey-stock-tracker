@@ -14,8 +14,8 @@ import { hashPassword } from './utils.js';
 
 export const MOCK = {
   tiendas: [
-    { id: 1, codigo: 'A01', nombre: 'Alajuela Centro', activa: true },
-    { id: 2, codigo: 'H01', nombre: 'Heredia',         activa: true }
+    { id: 1, codigo: 'A01', nombre: 'Alajuela Centro', activa: true, lat: 10.0162, lng: -84.2151, radio_metros: 300 },
+    { id: 2, codigo: 'H01', nombre: 'Heredia',         activa: true, lat:  9.9981, lng: -84.1170, radio_metros: 300 }
   ],
 
   usuarios: [
@@ -131,41 +131,6 @@ export const MOCK = {
         { articulo_id: 9, cantidad_inicial: 10, cantidad_actual: 10 }
       ]
     }
-  ],
-
-  turnos: [
-    { id: 1, nombre: 'Matutino',   hora_inicio: 6,  hora_fin: 12, color: '#f59e0b' },
-    { id: 2, nombre: 'Vespertino', hora_inicio: 12, hora_fin: 18, color: '#f97316' },
-    { id: 3, nombre: 'Nocturno',   hora_inicio: 18, hora_fin: 24, color: '#3b82f6' },
-    { id: 4, nombre: 'Madrugada',  hora_inicio: 0,  hora_fin: 6,  color: '#8b5cf6' },
-  ],
-
-  // turno_id: null = día libre | undefined (sin entrada) = sin restricción
-  horarios: [
-    // JMARTINEZ (id:3) · semana 21–27 abr 2026
-    { id: 1,  usuario_id: 3, fecha: '2026-04-21', turno_id: 1 },
-    { id: 2,  usuario_id: 3, fecha: '2026-04-22', turno_id: 1 },
-    { id: 3,  usuario_id: 3, fecha: '2026-04-23', turno_id: 2 },
-    { id: 4,  usuario_id: 3, fecha: '2026-04-24', turno_id: null },
-    { id: 5,  usuario_id: 3, fecha: '2026-04-25', turno_id: 1 },
-    { id: 6,  usuario_id: 3, fecha: '2026-04-26', turno_id: 1 },
-    { id: 7,  usuario_id: 3, fecha: '2026-04-27', turno_id: null },
-    // CCONTADOR (id:4) · semana 21–27 abr 2026
-    { id: 8,  usuario_id: 4, fecha: '2026-04-21', turno_id: 2 },
-    { id: 9,  usuario_id: 4, fecha: '2026-04-22', turno_id: 2 },
-    { id: 10, usuario_id: 4, fecha: '2026-04-23', turno_id: 1 },
-    { id: 11, usuario_id: 4, fecha: '2026-04-24', turno_id: 2 },
-    { id: 12, usuario_id: 4, fecha: '2026-04-25', turno_id: 2 },
-    { id: 13, usuario_id: 4, fecha: '2026-04-26', turno_id: 3 },
-    { id: 14, usuario_id: 4, fecha: '2026-04-27', turno_id: null },
-    // KLOPEZ (id:7) · semana 21–27 abr 2026
-    { id: 15, usuario_id: 7, fecha: '2026-04-21', turno_id: 1 },
-    { id: 16, usuario_id: 7, fecha: '2026-04-22', turno_id: 1 },
-    { id: 17, usuario_id: 7, fecha: '2026-04-23', turno_id: 1 },
-    { id: 18, usuario_id: 7, fecha: '2026-04-24', turno_id: null },
-    { id: 19, usuario_id: 7, fecha: '2026-04-25', turno_id: 1 },
-    { id: 20, usuario_id: 7, fecha: '2026-04-26', turno_id: 2 },
-    { id: 21, usuario_id: 7, fecha: '2026-04-27', turno_id: null },
   ],
 
   movimientos: [
