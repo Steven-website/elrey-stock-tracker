@@ -778,6 +778,42 @@ main {
 }
 .tienda-caja-pos { color: var(--muted); }
 
+/* ---- Atajos de cantidad rápida --------------------------------------- */
+.qty-shortcuts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.qty-shortcut {
+  flex: 1;
+  min-width: 48px;
+  padding: 8px 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+
+.qty-shortcut:active,
+.qty-shortcut.active {
+  background: rgba(245,184,0,0.12);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.qty-shortcut-all {
+  flex: 2;
+  color: var(--text);
+  font-size: 12px;
+}
+
 /* =====================================================================
    RESPONSIVE — Diseño escritorio (≥ 768 px)
 ===================================================================== */

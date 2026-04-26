@@ -197,7 +197,13 @@ function renderQtyModal(tipo) {
     </div>
 
     <label class="label">Cantidad a ${tipo}</label>
-    <div class="counter">
+    <div class="qty-shortcuts">
+      ${[1,5,10,25].filter(n => n <= max).map(n =>
+        `<button class="qty-shortcut" data-qty="${n}">${n}</button>`
+      ).join('')}
+      <button class="qty-shortcut qty-shortcut-all" data-qty="${max}">Todo (${max})</button>
+    </div>
+    <div class="counter" style="margin-top:8px;">
       <button id="qty-minus">−</button>
       <input type="number" id="qty-input" value="1" min="1" max="${max}" />
       <button id="qty-plus">+</button>
@@ -231,11 +237,23 @@ function renderQtyModal(tipo) {
   const modal = modalShell(verb + ' unidades', bodyHtml, footerHtml);
 
   const input = modal.querySelector('#qty-input');
+
+  modal.querySelectorAll('.qty-shortcut').forEach(btn => {
+    btn.onclick = () => {
+      const qty = Math.min(max, parseInt(btn.dataset.qty));
+      input.value = qty;
+      modal.querySelectorAll('.qty-shortcut').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    };
+  });
+
   modal.querySelector('#qty-minus').onclick = () => {
     input.value = Math.max(1, parseInt(input.value || '1') - 1);
+    modal.querySelectorAll('.qty-shortcut').forEach(b => b.classList.remove('active'));
   };
   modal.querySelector('#qty-plus').onclick = () => {
     input.value = Math.min(max, parseInt(input.value || '1') + 1);
+    modal.querySelectorAll('.qty-shortcut').forEach(b => b.classList.remove('active'));
   };
   modal.querySelector('#cancel-act').onclick = () => { State.modal = 'box'; render(); };
   modal.querySelector('#confirm-act').onclick = async () => {
