@@ -601,7 +601,7 @@ function movListItem(m) {
             : m.tipo === 'trasladar_caja' ? 'Traslado'
             : m.tipo;
   const detalle = m.articulo
-    ? `${m.cantidad ?? ''} × ${escapeHtml(m.articulo.descripcion)}`
+    ? `${m.cantidad ?? ''} × ${escapeHtml(m.articulo.descripcion)}${m.articulo.sku ? ` <span class="mono" style="font-size:11px; color:var(--muted);">${escapeHtml(m.articulo.sku)}</span>` : ''}`
     : (m.motivo || '');
   return $(`
     <div class="list-item">

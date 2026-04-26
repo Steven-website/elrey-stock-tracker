@@ -409,7 +409,7 @@ export function renderHistoryModal() {
                 : m.tipo === 'trasladar_caja' ? 'Traslado'
                 : m.tipo;
       const detail = m.articulo
-        ? `<strong>${m.cantidad ?? ''}</strong> × ${escapeHtml(m.articulo.descripcion)}`
+        ? `<strong>${m.cantidad ?? ''}</strong> × ${escapeHtml(m.articulo.descripcion)}${m.articulo.sku ? ` <span class="mono" style="font-size:11px; color:var(--muted);">${escapeHtml(m.articulo.sku)}</span>` : ''}`
         : (m.motivo || '');
       list.appendChild($(`
         <div class="history-item">
