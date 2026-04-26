@@ -438,6 +438,92 @@ export const API = {
     return data;
   },
 
+  // -------------------- UBICACIONES (Bodega → Pasillo → Estante) ----------
+  async listBodegas(tiendaId = null) {
+    if (isDemoMode()) return tiendaId ? MOCK.bodegas.filter(b => b.tienda_id === tiendaId) : MOCK.bodegas;
+    let q = sb.from('bodegas').select('*').order('nombre');
+    if (tiendaId) q = q.eq('tienda_id', tiendaId);
+    const { data, error } = await q;
+    if (error) throw error;
+    return data;
+  },
+
+  async createBodega({ tienda_id, nombre, descripcion = '' }) {
+    if (isDemoMode()) {
+      const b = { id: nextId(MOCK.bodegas), tienda_id, nombre, descripcion };
+      MOCK.bodegas.push(b); return b;
+    }
+    const { data, error } = await sb.from('bodegas').insert({ tienda_id, nombre, descripcion }).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async deleteBodega(id) {
+    if (isDemoMode()) {
+      const pasillos = MOCK.pasillos.filter(p => p.bodega_id === id).map(p => p.id);
+      MOCK.estantes  = MOCK.estantes.filter(e => !pasillos.includes(e.pasillo_id));
+      MOCK.pasillos  = MOCK.pasillos.filter(p => p.bodega_id !== id);
+      MOCK.bodegas   = MOCK.bodegas.filter(b => b.id !== id);
+      return;
+    }
+    const { error } = await sb.from('bodegas').delete().eq('id', id);
+    if (error) throw error;
+  },
+
+  async listPasillos(bodegaId = null) {
+    if (isDemoMode()) return bodegaId ? MOCK.pasillos.filter(p => p.bodega_id === bodegaId) : MOCK.pasillos;
+    let q = sb.from('pasillos').select('*').order('nombre');
+    if (bodegaId) q = q.eq('bodega_id', bodegaId);
+    const { data, error } = await q;
+    if (error) throw error;
+    return data;
+  },
+
+  async createPasillo({ bodega_id, nombre }) {
+    if (isDemoMode()) {
+      const p = { id: nextId(MOCK.pasillos), bodega_id, nombre };
+      MOCK.pasillos.push(p); return p;
+    }
+    const { data, error } = await sb.from('pasillos').insert({ bodega_id, nombre }).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async deletePasillo(id) {
+    if (isDemoMode()) {
+      MOCK.estantes = MOCK.estantes.filter(e => e.pasillo_id !== id);
+      MOCK.pasillos = MOCK.pasillos.filter(p => p.id !== id);
+      return;
+    }
+    const { error } = await sb.from('pasillos').delete().eq('id', id);
+    if (error) throw error;
+  },
+
+  async listEstantes(pasilloId = null) {
+    if (isDemoMode()) return pasilloId ? MOCK.estantes.filter(e => e.pasillo_id === pasilloId) : MOCK.estantes;
+    let q = sb.from('estantes').select('*').order('nombre');
+    if (pasilloId) q = q.eq('pasillo_id', pasilloId);
+    const { data, error } = await q;
+    if (error) throw error;
+    return data;
+  },
+
+  async createEstante({ pasillo_id, nombre }) {
+    if (isDemoMode()) {
+      const e = { id: nextId(MOCK.estantes), pasillo_id, nombre };
+      MOCK.estantes.push(e); return e;
+    }
+    const { data, error } = await sb.from('estantes').insert({ pasillo_id, nombre }).select().single();
+    if (error) throw error;
+    return data;
+  },
+
+  async deleteEstante(id) {
+    if (isDemoMode()) { MOCK.estantes = MOCK.estantes.filter(e => e.id !== id); return; }
+    const { error } = await sb.from('estantes').delete().eq('id', id);
+    if (error) throw error;
+  },
+
   // -------------------- ARTÍCULOS (CRUD admin) --------------------
   async createArticulo({ codigo_barras, sku, descripcion, familia, unidades_por_caja }) {
     if (isDemoMode()) {

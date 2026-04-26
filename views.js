@@ -746,7 +746,7 @@ function renderAdminMasView() {
     case 'inicio':      _apInicio(content);      break;
     case 'usuarios':    _apUsuarios(content);    break;
     case 'tiendas':     _apTiendas(content);     break;
-    case 'ubicaciones': _apProximamente(content, ICON.box,    'Gestión de ubicaciones', 'Bodegas, pasillos y estantes por tienda'); break;
+    case 'ubicaciones': _apUbicaciones(content); break;
     case 'indicadores': _apProximamente(content, ICON.filter, 'Indicadores globales',   'Gráficos y métricas de inventario global'); break;
     case 'config':      _apConfig(content, demo); break;
     case 'auditoria':   _apAuditoria(content);   break;
@@ -1121,6 +1121,231 @@ function _apAuditoria(el) {
     clearAuditLog();
     _apAuditoria(el);
   };
+}
+
+// ── Tab: Ubicaciones (Bodega → Pasillo → Estante) ─────────────────────
+function _apUbicaciones(el) {
+  el.innerHTML = `<div style="display:flex;justify-content:center;padding:32px;"><div class="loader"></div></div>`;
+
+  Promise.all([API.listTiendas(), API.listBodegas(), API.listPasillos(), API.listEstantes()])
+    .then(([tiendas, bodegas, pasillos, estantes]) => {
+      if (!tiendas.length) { el.innerHTML = `<div class="empty" style="padding:40px;"><p>Sin tiendas cargadas</p></div>`; return; }
+
+      if (!State.adminTiendaId || !tiendas.find(t => t.id === State.adminTiendaId)) {
+        State.adminTiendaId = tiendas[0].id;
+      }
+
+      const render = () => _renderUbicacionesBody(el, tiendas, bodegas, pasillos, estantes);
+      render();
+    }).catch(e => {
+      el.innerHTML = `<div class="empty" style="padding:40px;"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
+    });
+}
+
+function _renderUbicacionesBody(el, tiendas, bodegas, pasillos, estantes) {
+  const expandedBodegas  = new Set();
+  const expandedPasillos = new Set();
+
+  const draw = () => {
+    const tid     = State.adminTiendaId;
+    const bodT    = bodegas.filter(b => b.tienda_id === tid);
+    const tienda  = tiendas.find(t => t.id === tid);
+
+    const selectorHtml = tiendas.map(t => `
+      <button class="tienda-sel-btn ${t.id === tid ? 'active' : ''}" data-tid="${t.id}">${escapeHtml(t.nombre)}</button>
+    `).join('');
+
+    el.innerHTML = `
+      <div class="tienda-selector">${selectorHtml}</div>
+      <div style="padding:12px;">
+        <div class="dash-card">
+          <div class="dash-card-header">
+            <div class="dash-card-title">${ICON.box} ${escapeHtml(tienda?.nombre || '')} — Bodegas</div>
+            <button class="btn btn-sm btn-primary" id="btn-add-bodega">${ICON.add} Bodega</button>
+          </div>
+          <div id="ub-tree" style="padding:8px 0;"></div>
+        </div>
+      </div>
+    `;
+
+    el.querySelectorAll('.tienda-sel-btn').forEach(btn => {
+      btn.onclick = () => { State.adminTiendaId = parseInt(btn.dataset.tid); draw(); };
+    });
+
+    el.querySelector('#btn-add-bodega').onclick = async () => {
+      const nombre = prompt('Nombre de la nueva bodega:');
+      if (!nombre?.trim()) return;
+      const desc = prompt('Descripción (opcional):') || '';
+      try {
+        const b = await API.createBodega({ tienda_id: tid, nombre: nombre.trim(), descripcion: desc.trim() });
+        bodegas.push(b);
+        expandedBodegas.add(b.id);
+        toast('Bodega creada', 'success');
+        draw();
+      } catch(e) { toast('Error: ' + e.message, 'error'); }
+    };
+
+    const tree = el.querySelector('#ub-tree');
+
+    if (!bodT.length) {
+      tree.innerHTML = `<div class="empty" style="padding:20px;"><p>Sin bodegas — agregá una con el botón</p></div>`;
+      return;
+    }
+
+    bodT.forEach(bodega => {
+      const isOpen = expandedBodegas.has(bodega.id);
+      const pasB   = pasillos.filter(p => p.bodega_id === bodega.id);
+      const totalEst = pasB.reduce((s, p) => s + estantes.filter(e => e.pasillo_id === p.id).length, 0);
+
+      const bodNode = $(`
+        <div class="ub-bodega">
+          <div class="ub-bodega-hdr" data-bid="${bodega.id}">
+            <span class="ub-chevron">${isOpen ? '▼' : '►'}</span>
+            <span class="ub-bodega-name">${escapeHtml(bodega.nombre)}</span>
+            <span class="ub-bodega-meta">${pasB.length} pasillo${pasB.length!==1?'s':''} · ${totalEst} estante${totalEst!==1?'s':''}</span>
+            <div class="ub-bodega-actions">
+              <button class="btn btn-sm" data-add-pasillo="${bodega.id}">${ICON.add} Pasillo</button>
+              <button class="ub-del-btn" data-del-bodega="${bodega.id}" title="Eliminar bodega">${ICON.trash}</button>
+            </div>
+          </div>
+          ${isOpen ? `<div class="ub-pasillos" data-bid="${bodega.id}"></div>` : ''}
+        </div>
+      `);
+
+      // Toggle expand
+      bodNode.querySelector('.ub-bodega-hdr').onclick = e => {
+        if (e.target.closest('button')) return;
+        if (isOpen) expandedBodegas.delete(bodega.id); else expandedBodegas.add(bodega.id);
+        draw();
+      };
+
+      // Add pasillo
+      bodNode.querySelector(`[data-add-pasillo]`).onclick = async e => {
+        e.stopPropagation();
+        const nombre = prompt(`Nuevo pasillo en "${bodega.nombre}":`);
+        if (!nombre?.trim()) return;
+        try {
+          const p = await API.createPasillo({ bodega_id: bodega.id, nombre: nombre.trim() });
+          pasillos.push(p);
+          expandedBodegas.add(bodega.id);
+          expandedPasillos.add(p.id);
+          toast('Pasillo creado', 'success');
+          draw();
+        } catch(e) { toast('Error: ' + e.message, 'error'); }
+      };
+
+      // Delete bodega
+      bodNode.querySelector(`[data-del-bodega]`).onclick = async e => {
+        e.stopPropagation();
+        if (!confirm(`¿Eliminar bodega "${bodega.nombre}" y todo su contenido?`)) return;
+        try {
+          await API.deleteBodega(bodega.id);
+          const pasIds = pasillos.filter(p => p.bodega_id === bodega.id).map(p => p.id);
+          estantes.splice(0, estantes.length, ...estantes.filter(e => !pasIds.includes(e.pasillo_id)));
+          pasillos.splice(0, pasillos.length, ...pasillos.filter(p => p.bodega_id !== bodega.id));
+          bodegas.splice(0, bodegas.length, ...bodegas.filter(b => b.id !== bodega.id));
+          toast('Bodega eliminada', 'success');
+          draw();
+        } catch(e) { toast('Error: ' + e.message, 'error'); }
+      };
+
+      // Render pasillos if expanded
+      if (isOpen) {
+        const pasCont = bodNode.querySelector('.ub-pasillos');
+        if (!pasB.length) {
+          pasCont.innerHTML = `<div style="padding:10px 24px;font-size:12px;color:var(--muted);">Sin pasillos — usá "+ Pasillo" para agregar</div>`;
+        } else {
+          pasB.forEach(pasillo => {
+            const isPasOpen = expandedPasillos.has(pasillo.id);
+            const estP      = estantes.filter(e => e.pasillo_id === pasillo.id);
+
+            const pasNode = $(`
+              <div class="ub-pasillo">
+                <div class="ub-pasillo-hdr" data-pid="${pasillo.id}">
+                  <span class="ub-chevron ub-chevron-sm">${isPasOpen ? '▼' : '►'}</span>
+                  <span class="ub-pasillo-name">${escapeHtml(pasillo.nombre)}</span>
+                  <span class="ub-bodega-meta">${estP.length} estante${estP.length!==1?'s':''}</span>
+                  <div class="ub-bodega-actions">
+                    <button class="btn btn-sm" data-add-estante="${pasillo.id}">${ICON.add} Estante</button>
+                    <button class="ub-del-btn" data-del-pasillo="${pasillo.id}" title="Eliminar pasillo">${ICON.trash}</button>
+                  </div>
+                </div>
+                ${isPasOpen ? `<div class="ub-estantes" data-pid="${pasillo.id}"></div>` : ''}
+              </div>
+            `);
+
+            // Toggle pasillo
+            pasNode.querySelector('.ub-pasillo-hdr').onclick = e => {
+              if (e.target.closest('button')) return;
+              if (isPasOpen) expandedPasillos.delete(pasillo.id); else expandedPasillos.add(pasillo.id);
+              draw();
+            };
+
+            // Add estante
+            pasNode.querySelector(`[data-add-estante]`).onclick = async e => {
+              e.stopPropagation();
+              const nombre = prompt(`Nuevo estante en "${pasillo.nombre}" (ej. A-04):`);
+              if (!nombre?.trim()) return;
+              try {
+                const est = await API.createEstante({ pasillo_id: pasillo.id, nombre: nombre.trim() });
+                estantes.push(est);
+                expandedPasillos.add(pasillo.id);
+                toast('Estante creado', 'success');
+                draw();
+              } catch(e) { toast('Error: ' + e.message, 'error'); }
+            };
+
+            // Delete pasillo
+            pasNode.querySelector(`[data-del-pasillo]`).onclick = async e => {
+              e.stopPropagation();
+              if (!confirm(`¿Eliminar pasillo "${pasillo.nombre}" y sus estantes?`)) return;
+              try {
+                await API.deletePasillo(pasillo.id);
+                estantes.splice(0, estantes.length, ...estantes.filter(e => e.pasillo_id !== pasillo.id));
+                pasillos.splice(0, pasillos.length, ...pasillos.filter(p => p.id !== pasillo.id));
+                toast('Pasillo eliminado', 'success');
+                draw();
+              } catch(e) { toast('Error: ' + e.message, 'error'); }
+            };
+
+            // Render estantes
+            if (isPasOpen) {
+              const estCont = pasNode.querySelector('.ub-estantes');
+              if (!estP.length) {
+                estCont.innerHTML = `<div style="padding:8px 32px;font-size:12px;color:var(--muted);">Sin estantes — usá "+ Estante"</div>`;
+              } else {
+                const chips = estP.map(est => `
+                  <span class="ub-estante-chip" data-del-estante="${est.id}">
+                    ${escapeHtml(est.nombre)} ${ICON.close}
+                  </span>
+                `).join('');
+                estCont.innerHTML = `<div class="ub-estantes-chips">${chips}</div>`;
+                estCont.querySelectorAll('[data-del-estante]').forEach(chip => {
+                  chip.onclick = async () => {
+                    const id = parseInt(chip.dataset.delEstante);
+                    const est = estantes.find(e => e.id === id);
+                    if (!confirm(`¿Eliminar estante "${est?.nombre}"?`)) return;
+                    try {
+                      await API.deleteEstante(id);
+                      estantes.splice(0, estantes.length, ...estantes.filter(e => e.id !== id));
+                      toast('Estante eliminado', 'success');
+                      draw();
+                    } catch(e) { toast('Error: ' + e.message, 'error'); }
+                  };
+                });
+              }
+            }
+
+            pasCont.appendChild(pasNode);
+          });
+        }
+      }
+
+      tree.appendChild(bodNode);
+    });
+  };
+
+  draw();
 }
 
 // ── Tab: Próximamente ─────────────────────────────────────────────────

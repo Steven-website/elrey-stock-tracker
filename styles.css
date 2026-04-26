@@ -1398,6 +1398,109 @@ main {
   min-height: 0;
 }
 
+/* ---- Árbol de ubicaciones (Bodega → Pasillo → Estante) ---------------- */
+.ub-bodega { border-bottom: 1px solid var(--border); }
+.ub-bodega:last-child { border-bottom: none; }
+
+.ub-bodega-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
+}
+.ub-bodega-hdr:hover { background: var(--surface-2); }
+
+.ub-chevron {
+  font-size: 10px;
+  color: var(--muted-2);
+  width: 12px;
+  flex-shrink: 0;
+}
+.ub-chevron-sm { font-size: 9px; }
+
+.ub-bodega-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  flex: 1;
+}
+.ub-pasillo-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+}
+.ub-bodega-meta {
+  font-size: 11px;
+  color: var(--muted-2);
+  white-space: nowrap;
+}
+.ub-bodega-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.ub-del-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  color: var(--muted-2);
+  transition: background 0.1s, color 0.1s;
+}
+.ub-del-btn svg { width: 13px; height: 13px; }
+.ub-del-btn:hover { background: #fee2e2; color: var(--danger); }
+
+.ub-pasillos { border-top: 1px solid var(--border); background: var(--surface-2); }
+
+.ub-pasillo { border-bottom: 1px solid var(--border); }
+.ub-pasillo:last-child { border-bottom: none; }
+
+.ub-pasillo-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px 10px 32px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
+}
+.ub-pasillo-hdr:hover { background: var(--border); }
+
+.ub-estantes { background: var(--bg); border-top: 1px solid var(--border); }
+
+.ub-estantes-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 16px 10px 48px;
+}
+
+.ub-estante-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--surface);
+  border: 1.5px solid var(--border-2);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.1s, background 0.1s;
+}
+.ub-estante-chip svg { width: 10px; height: 10px; color: var(--muted-2); }
+.ub-estante-chip:hover { border-color: var(--danger); background: #fee2e2; }
+.ub-estante-chip:hover svg { color: var(--danger); }
+
 /* ---- Theme toggle button ---------------------------------------------- */
 .btn-theme {
   width: 34px;

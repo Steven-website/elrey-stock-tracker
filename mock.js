@@ -31,13 +31,44 @@ export const MOCK = {
 
   posiciones: [
     // Alajuela Centro
-    { id: 1, descripcion: 'P1-E1-N1', ubicacion: 'Bodega A01',    tipo: 'bodega',     tienda_id: 1 },
-    { id: 2, descripcion: 'P1-E2-N1', ubicacion: 'Bodega A01',    tipo: 'bodega',     tienda_id: 1 },
-    { id: 3, descripcion: 'P2-E1-N1', ubicacion: 'Corona A01',    tipo: 'corona',     tienda_id: 1 },
-    { id: 4, descripcion: 'V1-E1-N1', ubicacion: 'Exhibición A01',tipo: 'exhibicion', tienda_id: 1 },
+    { id: 1, descripcion: 'P1-E1-N1', ubicacion: 'Bodega A01',    tipo: 'bodega',     tienda_id: 1, estante_id: 1 },
+    { id: 2, descripcion: 'P1-E2-N1', ubicacion: 'Bodega A01',    tipo: 'bodega',     tienda_id: 1, estante_id: 2 },
+    { id: 3, descripcion: 'P2-E1-N1', ubicacion: 'Corona A01',    tipo: 'corona',     tienda_id: 1, estante_id: 4 },
+    { id: 4, descripcion: 'V1-E1-N1', ubicacion: 'Exhibición A01',tipo: 'exhibicion', tienda_id: 1, estante_id: 6 },
     // Heredia
-    { id: 5, descripcion: 'P1-E1-N1', ubicacion: 'Bodega H01',    tipo: 'bodega',     tienda_id: 2 },
-    { id: 6, descripcion: 'P2-E1-N1', ubicacion: 'Corona H01',    tipo: 'corona',     tienda_id: 2 }
+    { id: 5, descripcion: 'P1-E1-N1', ubicacion: 'Bodega H01',    tipo: 'bodega',     tienda_id: 2, estante_id: 7 },
+    { id: 6, descripcion: 'P2-E1-N1', ubicacion: 'Corona H01',    tipo: 'corona',     tienda_id: 2, estante_id: 9 }
+  ],
+
+  bodegas: [
+    { id: 1, tienda_id: 1, nombre: 'Bodega Central',  descripcion: 'Bodega principal de la tienda' },
+    { id: 2, tienda_id: 1, nombre: 'Exhibición',      descripcion: 'Área de exhibición al cliente' },
+    { id: 3, tienda_id: 2, nombre: 'Bodega Norte',    descripcion: 'Bodega principal Heredia' }
+  ],
+
+  pasillos: [
+    { id: 1, bodega_id: 1, nombre: 'Pasillo A' },
+    { id: 2, bodega_id: 1, nombre: 'Pasillo B' },
+    { id: 3, bodega_id: 2, nombre: 'Exhibición 1' },
+    { id: 4, bodega_id: 3, nombre: 'Pasillo A' },
+    { id: 5, bodega_id: 3, nombre: 'Pasillo B' }
+  ],
+
+  estantes: [
+    // Alajuela · Bodega Central · Pasillo A
+    { id: 1, pasillo_id: 1, nombre: 'A-01' },
+    { id: 2, pasillo_id: 1, nombre: 'A-02' },
+    { id: 3, pasillo_id: 1, nombre: 'A-03' },
+    // Alajuela · Bodega Central · Pasillo B
+    { id: 4, pasillo_id: 2, nombre: 'B-01' },
+    { id: 5, pasillo_id: 2, nombre: 'B-02' },
+    // Alajuela · Exhibición · Exhibición 1
+    { id: 6, pasillo_id: 3, nombre: 'E-01' },
+    // Heredia · Bodega Norte · Pasillo A
+    { id: 7, pasillo_id: 4, nombre: 'A-01' },
+    { id: 8, pasillo_id: 4, nombre: 'A-02' },
+    // Heredia · Bodega Norte · Pasillo B
+    { id: 9, pasillo_id: 5, nombre: 'B-01' }
   ],
 
   articulos: [
