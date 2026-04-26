@@ -1,990 +1,415 @@
 // =====================================================================
-// modals.js — todos los modales de la aplicación
+// api.js — cliente Supabase + capa de API (con fallback a MOCK)
 // =====================================================================
 
-import { State, Storage } from './state.js';
-import { API, initSupabase } from './api.js';
-import { MOCK } from './mock.js';
-import { ICON, $, escapeHtml, fmtDate, fmtDateTime, toast, generateBoxCode } from './utils.js';
-import { isValidUsername, isValidPassword } from './auth.js';
-import { startScanner, stopScanner } from './scanner.js';
-import { render } from './main.js';
+import { State, isDemoMode } from './state.js';
+import { MOCK, nextId } from './mock.js';
+import { toast, hashPassword } from './utils.js';
 
-// =====================================================================
-// HELPERS
-// =====================================================================
-export function modalShell(title, bodyHtml, footerHtml = '') {
-  const m = $(`
-    <div class="modal-backdrop">
-      <div class="modal-sheet">
-        <div class="modal-handle"></div>
-        <div class="modal-header">
-          <h2>${title}</h2>
-          <button class="close" id="modal-close">${ICON.close}</button>
-        </div>
-        <div class="modal-body">${bodyHtml}</div>
-        ${footerHtml ? `<div class="modal-footer">${footerHtml}</div>` : ''}
-      </div>
-    </div>
-  `);
-  m.querySelector('#modal-close').onclick = () => closeModal();
-  m.onclick = e => { if (e.target === m) closeModal(); };
-  return m;
-}
+// Cliente Supabase (se inicializa desde initSupabase)
+let sb = null;
 
-export function closeModal() {
-  State.modal = null;
-  State.cache.currentBox = null;
-  render();
-}
-
-// =====================================================================
-// CAJA: detalle
-// =====================================================================
-export function renderBoxModal() {
-  const c = State.cache.currentBox;
-  if (!c) { closeModal(); return $(`<div></div>`); }
-
-  const isEmpty = (c.unidades_totales || 0) === 0;
-  const isConsumed = c.estado === 'vacia';
-  const tipoCaja = c.tipo_caja || 'reutilizable';
-
-  let bodyHtml = `
-    <div class="box-header">
-      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:8px;">
-        <div class="box-code grow truncate">${escapeHtml(c.codigo_caja)}</div>
-        <span class="pill pill-${tipoCaja === 'producto' ? 'info' : 'muted'}">${tipoCaja === 'producto' ? 'producto' : 'reutilizable'}</span>
-      </div>
-      <div class="box-loc">
-        ${ICON.pin}
-        <span>${escapeHtml(c.posicion?.ubicacion || 'Sin ubicar')} ${c.posicion?.descripcion ? '· ' + escapeHtml(c.posicion.descripcion) : ''}</span>
-      </div>
-      <div class="meta" style="margin-top:10px; font-family:var(--font-mono); font-size:11px; color:var(--muted);">
-        <span>creada ${fmtDate(c.fecha_creacion)}</span>
-        ${isConsumed ? `<span class="pill pill-warn" style="margin-left:8px;">consumida ${fmtDate(c.fecha_consumida)}</span>` : ''}
-      </div>
-    </div>
-
-    ${isEmpty && !isConsumed ? `
-      <div class="banner banner-warn" style="border:1px solid; padding:12px; margin-bottom:12px; display:flex; flex-direction:column; gap:10px; align-items:flex-start;">
-        <div style="display:flex; align-items:center; gap:8px;">
-          ${ICON.warn}<strong>Esta caja está vacía</strong>
-        </div>
-        <div style="font-size:12px; line-height:1.5;">
-          Marcala como <strong>consumida</strong> para sacarla del inventario activo. Los datos quedan guardados para análisis de consumo.
-        </div>
-        <button class="btn btn-sm btn-primary" id="btn-consume" style="width:100%;">
-          ${ICON.check} Marcar como consumida
-        </button>
-      </div>
-    ` : ''}
-
-    ${isConsumed ? `
-      <div class="banner banner-info" style="border:1px solid; padding:10px 14px; margin-bottom:12px;">
-        ${ICON.info}<span>Esta caja ya fue consumida. Su historial queda en la base para análisis.</span>
-      </div>
-    ` : ''}
-
-    <div class="section-title" style="padding:0 0 8px;">Contenido</div>
-    <div id="contenido-list">
-  `;
-
-  c.contenido?.forEach(item => {
-    const art = MOCK.articulos.find(a => a.id === item.articulo_id) || item.articulos || { descripcion: 'Artículo ' + item.articulo_id, sku: '—' };
-    const consumida = item.cantidad_inicial - item.cantidad_actual;
-    const standardHint = (tipoCaja === 'producto' && art.unidades_por_caja && art.unidades_por_caja !== item.cantidad_inicial)
-      ? ` · estándar ${art.unidades_por_caja}` : '';
-    bodyHtml += `
-      <div class="qty-row">
-        <div class="qty-row-top">
-          <div class="grow">
-            <div class="qty-row-name">${escapeHtml(art.descripcion)}</div>
-            <div class="qty-row-sku">${escapeHtml(art.sku || '—')}${standardHint}</div>
-          </div>
-        </div>
-        <div class="qty-row-numbers">
-          <div><small>Inicial</small><strong>${item.cantidad_inicial}</strong></div>
-          <div class="consumidas"><small>Consumido</small><strong>${consumida}</strong></div>
-          <div class="restantes"><small>Restante</small><strong>${item.cantidad_actual}</strong></div>
-        </div>
-        ${!isConsumed ? `
-          <div class="actions-grid">
-            <button class="btn btn-sm btn-danger" data-act="reduce" data-art="${item.articulo_id}">${ICON.minus} Reducir</button>
-            <button class="btn btn-sm btn-success" data-act="increase" data-art="${item.articulo_id}">${ICON.plus} Reponer</button>
-          </div>
-        ` : ''}
-      </div>
-    `;
-  });
-
-  bodyHtml += `</div>`;
-
-  const footerHtml = isConsumed
-    ? `<button class="btn btn-block" id="btn-history">${ICON.history} Ver historial</button>`
-    : `<button class="btn grow" id="btn-move">${ICON.move} Mover</button>
-       <button class="btn grow" id="btn-history">${ICON.history} Historial</button>`;
-
-  const modal = modalShell('Detalle de caja', bodyHtml, footerHtml);
-
-  modal.querySelectorAll('[data-act]').forEach(b => {
-    b.onclick = () => {
-      State.cache.currentArticleId = parseInt(b.dataset.art);
-      State.modal = b.dataset.act === 'reduce' ? 'reduce' : 'increase';
-      render();
-    };
-  });
-  modal.querySelector('#btn-move')?.addEventListener('click', () => { State.modal = 'move'; render(); });
-  modal.querySelector('#btn-history').onclick = () => { State.modal = 'history'; render(); };
-
-  modal.querySelector('#btn-consume')?.addEventListener('click', async () => {
-    if (!confirm('¿Marcar esta caja como consumida?\n\nQueda en la base para análisis de consumo, pero ya no aparecerá en la lista activa.')) return;
-    try {
-      await API.consumirCaja(c.id);
-      toast('Caja marcada como consumida', 'success');
-      closeModal();
-    } catch (e) {
-      toast('Error: ' + e.message, 'error');
-    }
-  });
-
-  return modal;
-}
-
-// =====================================================================
-// REDUCIR / AUMENTAR cantidad
-// =====================================================================
-export function renderReduceModal() { return renderQtyModal('reducir'); }
-export function renderIncreaseModal() { return renderQtyModal('aumentar'); }
-
-function renderQtyModal(tipo) {
-  const c = State.cache.currentBox;
-  const artId = State.cache.currentArticleId;
-  const item = c?.contenido?.find(i => i.articulo_id === artId);
-  const art = MOCK.articulos.find(a => a.id === artId) || item?.articulos || { descripcion: 'Artículo' };
-  const isReduce = tipo === 'reducir';
-  const verb = isReduce ? 'Reducir' : 'Reponer';
-  const max = isReduce ? item.cantidad_actual : item.cantidad_inicial - item.cantidad_actual;
-
-  const bodyHtml = `
-    <div class="box-header">
-      <div class="qty-row-name" style="margin-bottom:4px;">${escapeHtml(art.descripcion)}</div>
-      <div class="meta mono" style="font-size:11px; color:var(--muted);">${escapeHtml(c.codigo_caja)}</div>
-      <div style="margin-top:10px; font-family:var(--font-mono);">
-        ${isReduce ? `Disponible: <strong style="color:var(--accent);">${item.cantidad_actual}</strong>` : `Capacidad libre: <strong style="color:var(--accent);">${max}</strong>`}
-      </div>
-    </div>
-
-    <label class="label">Cantidad a ${tipo}</label>
-    <div class="counter">
-      <button id="qty-minus">−</button>
-      <input type="number" id="qty-input" value="1" min="1" max="${max}" />
-      <button id="qty-plus">+</button>
-    </div>
-
-    <label class="label" style="margin-top:16px;">Motivo</label>
-    <select class="select" id="motivo">
-      ${isReduce ? `
-        <option value="Venta">Venta</option>
-        <option value="Traslado a exhibición">Traslado a exhibición</option>
-        <option value="Merma">Merma</option>
-        <option value="Devolución a proveedor">Devolución a proveedor</option>
-        <option value="Otro">Otro</option>
-      ` : `
-        <option value="Reposición desde proveedor">Reposición desde proveedor</option>
-        <option value="Devolución de cliente">Devolución de cliente</option>
-        <option value="Ajuste de inventario">Ajuste de inventario</option>
-        <option value="Otro">Otro</option>
-      `}
-    </select>
-
-    <label class="label" style="margin-top:16px;">Notas (opcional)</label>
-    <textarea class="textarea" id="notas" rows="2" placeholder="Ej: factura #1234"></textarea>
-  `;
-
-  const footerHtml = `
-    <button class="btn grow" id="cancel-act">Cancelar</button>
-    <button class="btn btn-primary grow" id="confirm-act">Confirmar ${verb}</button>
-  `;
-
-  const modal = modalShell(verb + ' unidades', bodyHtml, footerHtml);
-
-  const input = modal.querySelector('#qty-input');
-  modal.querySelector('#qty-minus').onclick = () => {
-    input.value = Math.max(1, parseInt(input.value || '1') - 1);
-  };
-  modal.querySelector('#qty-plus').onclick = () => {
-    input.value = Math.min(max, parseInt(input.value || '1') + 1);
-  };
-  modal.querySelector('#cancel-act').onclick = () => { State.modal = 'box'; render(); };
-  modal.querySelector('#confirm-act').onclick = async () => {
-    const cantidad = Math.max(1, Math.min(max, parseInt(input.value || '1')));
-    const motivo = modal.querySelector('#motivo').value;
-    const notas = modal.querySelector('#notas').value;
-    try {
-      await API.createMovimiento({
-        tipo, caja_id: c.id, articulo_id: artId,
-        cantidad, motivo, notas, usuario_id: State.user.id
-      });
-      toast(`${verb} ${cantidad} unidades · OK`, 'success');
-      const updated = await API.getCajaByCode(c.codigo_caja);
-      State.cache.currentBox = updated;
-      State.modal = 'box';
-      render();
-    } catch (e) {
-      toast('Error: ' + e.message, 'error');
-    }
-  };
-
-  return modal;
-}
-
-// =====================================================================
-// MOVER caja
-// =====================================================================
-export function renderMoveModal() {
-  const c = State.cache.currentBox;
-  const bodyHtml = `
-    <div class="box-header">
-      <div class="qty-row-name" style="margin-bottom:4px;">Mover caja</div>
-      <div class="meta mono" style="font-size:11px; color:var(--muted);">${escapeHtml(c.codigo_caja)}</div>
-      <div style="margin-top:8px; font-size:13px;">
-        Desde: <strong>${escapeHtml(c.posicion?.ubicacion || '—')}${c.posicion?.descripcion ? ' · ' + escapeHtml(c.posicion.descripcion) : ''}</strong>
-      </div>
-    </div>
-    <label class="label">Nueva ubicación</label>
-    <select class="select" id="new-pos">
-      <option value="">— Selecciona —</option>
-    </select>
-    <label class="label" style="margin-top:16px;">Notas (opcional)</label>
-    <textarea class="textarea" id="notas" rows="2"></textarea>
-  `;
-  const footerHtml = `
-    <button class="btn grow" id="cancel-move">Cancelar</button>
-    <button class="btn btn-primary grow" id="confirm-move">Confirmar traslado</button>
-  `;
-
-  const modal = modalShell('Trasladar caja', bodyHtml, footerHtml);
-
-  API.listPosiciones().then(positions => {
-    const sel = modal.querySelector('#new-pos');
-    positions.filter(p => p.id !== c.posicion?.id).forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.id;
-      opt.textContent = `${p.ubicacion} · ${p.descripcion}`;
-      sel.appendChild(opt);
-    });
-  });
-
-  modal.querySelector('#cancel-move').onclick = () => { State.modal = 'box'; render(); };
-  modal.querySelector('#confirm-move').onclick = async () => {
-    const newPosId = parseInt(modal.querySelector('#new-pos').value);
-    if (!newPosId) { toast('Selecciona una ubicación', 'error'); return; }
-    const notas = modal.querySelector('#notas').value;
-    try {
-      await API.createMovimiento({
-        tipo: 'trasladar_caja', caja_id: c.id,
-        posicion_origen_id: c.posicion?.id, posicion_destino_id: newPosId,
-        usuario_id: State.user.id, notas
-      });
-      toast('Caja trasladada · OK', 'success');
-      const updated = await API.getCajaByCode(c.codigo_caja);
-      State.cache.currentBox = updated;
-      State.modal = 'box';
-      render();
-    } catch (e) { toast('Error: ' + e.message, 'error'); }
-  };
-
-  return modal;
-}
-
-// =====================================================================
-// HISTORIAL
-// =====================================================================
-export function renderHistoryModal() {
-  const c = State.cache.currentBox;
-  const bodyHtml = `
-    <div class="box-header" style="margin-bottom:12px;">
-      <div class="qty-row-name" style="margin-bottom:4px;">Historial</div>
-      <div class="meta mono" style="font-size:11px; color:var(--muted);">${escapeHtml(c.codigo_caja)}</div>
-    </div>
-    <div id="hist-list"><div class="empty"><div class="loader"></div></div></div>
-  `;
-  const modal = modalShell('Historial de caja', bodyHtml,
-    `<button class="btn btn-block" id="back-history">Volver</button>`);
-  modal.querySelector('#back-history').onclick = () => { State.modal = 'box'; render(); };
-
-  API.listMovimientosByCaja(c.id).then(movs => {
-    const list = modal.querySelector('#hist-list');
-    list.innerHTML = '';
-    if (!movs.length) {
-      list.innerHTML = `<div class="empty"><h3>Sin historial</h3></div>`; return;
-    }
-    movs.forEach(m => {
-      const cls = m.tipo === 'reducir' ? 'reducir'
-                : m.tipo === 'aumentar' ? 'aumentar'
-                : m.tipo === 'crear_caja' ? 'crear'
-                : m.tipo === 'trasladar_caja' ? 'trasladar' : '';
-      const verb = m.tipo === 'reducir' ? 'Salida'
-                : m.tipo === 'aumentar' ? 'Reposición'
-                : m.tipo === 'crear_caja' ? 'Caja creada'
-                : m.tipo === 'trasladar_caja' ? 'Traslado'
-                : m.tipo;
-      const detail = m.articulo
-        ? `<strong>${m.cantidad ?? ''}</strong> × ${escapeHtml(m.articulo.descripcion)}`
-        : (m.motivo || '');
-      list.appendChild($(`
-        <div class="history-item">
-          <div class="history-dot ${cls}"></div>
-          <div class="history-text">
-            <div><strong>${verb}</strong> ${detail ? '· ' + detail : ''}</div>
-            <div class="history-time">
-              ${escapeHtml(m.usuario?.nombre || '—')} · ${fmtDateTime(m.creado_at)}
-              ${m.motivo ? ' · ' + escapeHtml(m.motivo) : ''}
-            </div>
-          </div>
-        </div>
-      `));
-    });
-  });
-
-  return modal;
-}
-
-// =====================================================================
-// CONFIG SUPABASE
-// =====================================================================
-export function renderConfigModal() {
-  const isDemoMode = !State.config.url || !State.config.anonKey;
-  const bodyHtml = `
-    <p style="font-size:13px; color:var(--muted); margin-bottom:16px; line-height:1.5;">
-      Conectá tu propio Supabase para guardar datos reales. Si no conectás nada, la app sigue funcionando con datos de demo.
-    </p>
-    <label class="label">URL del proyecto</label>
-    <input class="input mono" id="cfg-url" placeholder="https://xxxxx.supabase.co"
-      value="${escapeHtml(State.config.url || '')}" />
-    <label class="label" style="margin-top:14px;">Anon / Public key</label>
-    <textarea class="textarea mono" id="cfg-key" rows="3" placeholder="eyJhbGciOiJIUzI1NiIs...">${escapeHtml(State.config.anonKey || '')}</textarea>
-    <div class="banner banner-info" style="margin-top:16px; border:1px solid;">
-      ${ICON.info}
-      <span>Tu URL y key se guardan únicamente en este dispositivo (localStorage). Nunca se envían a otro servidor.</span>
-    </div>
-  `;
-  const footerHtml = `
-    ${!isDemoMode ? '<button class="btn btn-danger grow" id="cfg-clear">Desconectar</button>' : ''}
-    <button class="btn btn-primary grow" id="cfg-save">Guardar y conectar</button>
-  `;
-  const modal = modalShell('Configurar Supabase', bodyHtml, footerHtml);
-  modal.querySelector('#cfg-save').onclick = () => {
-    const url = modal.querySelector('#cfg-url').value.trim();
-    const anonKey = modal.querySelector('#cfg-key').value.trim();
-    if (!url || !anonKey) { toast('Completá URL y key', 'error'); return; }
-    State.config = { url, anonKey };
-    Storage.set('config', State.config);
-    initSupabase();
-    toast('Conectado a Supabase', 'success');
-    closeModal();
-  };
-  modal.querySelector('#cfg-clear')?.addEventListener('click', () => {
-    State.config = { url: '', anonKey: '' };
-    Storage.remove('config');
-    initSupabase();
-    toast('Desconectado · modo demo', 'info');
-    closeModal();
-  });
-  return modal;
-}
-
-// =====================================================================
-// CREAR CAJA
-// =====================================================================
-export function renderCreateBoxModal() {
-  if (!State.cache.newBox) {
-    State.cache.newBox = {
-      codigo: generateBoxCode(),
-      tipo_caja: 'producto',
-      posicion_id: null,
-      items: [],
-      motivo: 'Recepción de proveedor'
-    };
-  }
-  const nb = State.cache.newBox;
-  const isProducto = nb.tipo_caja === 'producto';
-
-  const bodyHtml = `
-    <div class="section-title" style="padding:0 0 8px;">Tipo de caja</div>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:18px;">
-      <button class="btn btn-sm ${isProducto ? 'btn-primary' : ''}" data-tipo="producto" style="flex-direction:column; padding:12px; min-height:auto; gap:4px; text-align:center;">
-        ${ICON.box}
-        <div style="font-size:12px; font-weight:600;">Caja del producto</div>
-        <div style="font-size:10px; opacity:0.7; font-weight:400;">capacidad estándar</div>
-      </button>
-      <button class="btn btn-sm ${!isProducto ? 'btn-primary' : ''}" data-tipo="reutilizable" style="flex-direction:column; padding:12px; min-height:auto; gap:4px; text-align:center;">
-        ${ICON.box}
-        <div style="font-size:12px; font-weight:600;">Caja reutilizable</div>
-        <div style="font-size:10px; opacity:0.7; font-weight:400;">caja de bodega</div>
-      </button>
-    </div>
-
-    <div class="section-title" style="padding:0 0 8px;">1 · Código de la caja</div>
-    <div class="box-header" style="margin-bottom:16px;">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-        <div class="box-code" id="new-codigo">${escapeHtml(nb.codigo)}</div>
-        <button class="btn btn-sm btn-ghost" id="btn-regen" title="Generar otro">${ICON.refresh}</button>
-      </div>
-      <div style="font-size:11px; color:var(--muted); margin-top:6px; font-family:var(--font-mono);">
-        // este código se imprimirá como QR para pegar en la caja
-      </div>
-    </div>
-
-    <div class="section-title" style="padding:0 0 8px;">
-      2 · Contenido de la caja
-      <small id="items-count">${nb.items.length} producto${nb.items.length===1?'':'s'}</small>
-    </div>
-
-    ${isProducto ? `
-      <div class="banner banner-info" style="border:1px solid; margin-bottom:8px; font-size:11px; padding:8px 12px;">
-        ${ICON.info}
-        <span>Caja del producto: la app sugiere la cantidad estándar, pero podés editarla si el proveedor trajo menos.</span>
-      </div>
-    ` : ''}
-
-    <div id="items-list" style="margin-bottom:8px;">
-      ${nb.items.length === 0 ? `
-        <div class="empty" style="padding:20px; border:1px dashed var(--border-2);">
-          ${ICON.box}
-          <p style="margin-top:8px;">Todavía no hay productos en la caja</p>
-        </div>
-      ` : nb.items.map((it, idx) => `
-        <div class="qty-row">
-          <div class="qty-row-top">
-            <div class="grow">
-              <div class="qty-row-name">${escapeHtml(it.articulo.descripcion)}</div>
-              <div class="qty-row-sku">
-                ${escapeHtml(it.articulo.sku || '—')}
-                ${it.articulo.unidades_por_caja ? ` · estándar: ${it.articulo.unidades_por_caja}` : ''}
-              </div>
-            </div>
-            <button class="btn btn-sm btn-danger" data-rm="${idx}" style="padding:6px 10px;">${ICON.trash}</button>
-          </div>
-          <div style="margin-top:10px; display:flex; align-items:center; gap:10px;">
-            <small style="font-size:10px; color:var(--muted); letter-spacing:0.08em; text-transform:uppercase;">Cantidad recibida</small>
-            <input type="number" class="input mono" data-edit-qty="${idx}" value="${it.cantidad}" min="1" style="width:80px; padding:6px 10px; font-size:14px; text-align:center;" />
-            <small style="color:var(--muted); font-size:12px;">unidades</small>
-          </div>
-        </div>
-      `).join('')}
-    </div>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:20px;">
-      <button class="btn btn-sm" id="btn-scan-prod">${ICON.barcode} Escanear</button>
-      <button class="btn btn-sm" id="btn-pick-prod">${ICON.list} Seleccionar</button>
-    </div>
-
-    <div class="section-title" style="padding:0 0 8px;">3 · Ubicación destino</div>
-    <select class="select" id="new-pos">
-      <option value="">— Selecciona dónde se guarda —</option>
-    </select>
-
-    <label class="label" style="margin-top:14px;">Motivo / origen</label>
-    <select class="select" id="new-motivo">
-      <option value="Recepción de proveedor">Recepción de proveedor</option>
-      <option value="Reposición desde otra caja">Reposición desde otra caja</option>
-      <option value="Reorganización de bodega">Reorganización de bodega</option>
-      <option value="Transferencia entre tiendas">Transferencia entre tiendas</option>
-      <option value="Otro">Otro</option>
-    </select>
-  `;
-
-  const footerHtml = `
-    <button class="btn grow" id="cancel-create">Cancelar</button>
-    <button class="btn btn-primary grow" id="confirm-create">Crear caja</button>
-  `;
-  const modal = modalShell('Iniciar caja nueva', bodyHtml, footerHtml);
-
-  modal.querySelectorAll('[data-tipo]').forEach(b => {
-    b.onclick = () => { nb.tipo_caja = b.dataset.tipo; render(); };
-  });
-
-  API.listPosiciones().then(positions => {
-    const sel = modal.querySelector('#new-pos');
-    positions.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.id;
-      opt.textContent = `${p.ubicacion} · ${p.descripcion}`;
-      if (nb.posicion_id === p.id) opt.selected = true;
-      sel.appendChild(opt);
-    });
-  });
-
-  modal.querySelector('#new-motivo').value = nb.motivo;
-  modal.querySelector('#btn-regen').onclick = () => {
-    nb.codigo = generateBoxCode();
-    modal.querySelector('#new-codigo').textContent = nb.codigo;
-    toast('Código regenerado', 'info');
-  };
-  modal.querySelector('#new-pos').onchange = e => { nb.posicion_id = parseInt(e.target.value) || null; };
-  modal.querySelector('#new-motivo').onchange = e => { nb.motivo = e.target.value; };
-
-  modal.querySelectorAll('[data-edit-qty]').forEach(inp => {
-    inp.onchange = e => {
-      const idx = parseInt(e.target.dataset.editQty);
-      const v = Math.max(1, parseInt(e.target.value) || 1);
-      nb.items[idx].cantidad = v;
-      e.target.value = v;
-    };
-  });
-
-  modal.querySelectorAll('[data-rm]').forEach(b => {
-    b.onclick = () => {
-      const idx = parseInt(b.dataset.rm);
-      nb.items.splice(idx, 1);
-      render();
-    };
-  });
-
-  modal.querySelector('#btn-scan-prod').onclick = () => {
-    State.modal = 'scanProduct'; render();
-  };
-
-  modal.querySelector('#btn-pick-prod').onclick = async () => {
-    const articulos = await API.listArticulos();
-    const sku = prompt('Ingresá el SKU o código del producto:\n\n' +
-      articulos.slice(0, 10).map(a => `${a.sku} · ${a.descripcion}`).join('\n'));
-    if (!sku) return;
-    const found = articulos.find(a =>
-      a.sku === sku.trim() || a.codigo_barras === sku.trim() ||
-      a.descripcion.toLowerCase().includes(sku.trim().toLowerCase())
-    );
-    if (!found) { toast('No encontré ese producto', 'error'); return; }
-    addProductToNewBox(found);
-  };
-
-  modal.querySelector('#cancel-create').onclick = () => {
-    if (confirm('¿Descartar la caja en progreso?')) {
-      State.cache.newBox = null;
-      closeModal();
-    }
-  };
-
-  modal.querySelector('#confirm-create').onclick = async () => {
-    if (!nb.posicion_id) { toast('Selecciona una ubicación', 'error'); return; }
-    if (!nb.items.length) {
-      if (!confirm('La caja está vacía. ¿Crear de todos modos?')) return;
-    }
-    try {
-      await API.createCaja({
-        codigo_caja: nb.codigo,
-        tipo_caja: nb.tipo_caja,
-        posicion_id: nb.posicion_id,
-        items: nb.items.map(it => ({ articulo_id: it.articulo.id, cantidad: it.cantidad })),
-        motivo: nb.motivo
-      });
-      toast('Caja creada · ' + nb.codigo, 'success');
-      State.cache.printCode = nb.codigo;
-      State.cache.newBox = null;
-      State.modal = 'print';
-      render();
-    } catch (e) {
-      toast('Error: ' + e.message, 'error');
-    }
-  };
-
-  return modal;
-}
-
-function addProductToNewBox(articulo) {
-  const nb = State.cache.newBox;
-  const isProducto = nb.tipo_caja === 'producto';
-  const sugerida = isProducto && articulo.unidades_por_caja ? articulo.unidades_por_caja : 1;
-  const promptMsg = isProducto && articulo.unidades_por_caja
-    ? `Cantidad recibida de "${articulo.descripcion}":\n\nCapacidad estándar: ${articulo.unidades_por_caja} unidades\n(podés editar si el proveedor trajo menos)`
-    : `Cantidad de "${articulo.descripcion}" en la caja:`;
-  const cantidad = parseInt(prompt(promptMsg, String(sugerida)));
-  if (!cantidad || cantidad < 1) return;
-  const existing = nb.items.find(it => it.articulo.id === articulo.id);
-  if (existing) existing.cantidad += cantidad;
-  else nb.items.push({ articulo, cantidad });
-  toast(`Agregado: ${cantidad} × ${articulo.descripcion}`, 'success');
-  State.modal = 'create';
-  render();
-}
-
-// =====================================================================
-// ESCANEAR PRODUCTO (sub-modal)
-// =====================================================================
-export function renderScanProductModal() {
-  const bodyHtml = `
-    <p style="font-size:13px; color:var(--muted); margin-bottom:12px;">
-      Apuntá la cámara al código de barras del producto.
-    </p>
-    <div class="scan-hero" style="margin:0;">
-      <div class="scan-hero-inner" id="prod-scan-host">
-        <div id="prod-qr-reader"></div>
-        <div class="scan-overlay">
-          <div class="scan-frame">
-            <span></span><span></span>
-            <div class="scan-line"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <label class="label" style="margin-top:16px;">O ingresá el código a mano</label>
-    <div style="display:flex; gap:8px;">
-      <input class="input mono" id="prod-manual" placeholder="SKU o código de barras" />
-      <button class="btn" id="prod-manual-btn">${ICON.check}</button>
-    </div>
-  `;
-  const footerHtml = `<button class="btn btn-block" id="prod-cancel">Volver</button>`;
-  const modal = modalShell('Escanear producto', bodyHtml, footerHtml);
-
-  setTimeout(() => {
-    startScanner('prod-qr-reader', handleProductScanned, {
-      qrbox: { width: 240, height: 160 }
-    });
-  }, 100);
-
-  modal.querySelector('#prod-manual-btn').onclick = () => {
-    const v = modal.querySelector('#prod-manual').value.trim();
-    if (v) { stopScanner(); handleProductScanned(v); }
-  };
-  modal.querySelector('#prod-manual').onkeydown = e => {
-    if (e.key === 'Enter') {
-      const v = e.target.value.trim();
-      if (v) { stopScanner(); handleProductScanned(v); }
-    }
-  };
-  modal.querySelector('#prod-cancel').onclick = () => {
-    stopScanner();
-    State.modal = 'create';
-    render();
-  };
-
-  return modal;
-}
-
-async function handleProductScanned(code) {
+export function initSupabase() {
+  if (isDemoMode()) { sb = null; return; }
   try {
-    const articulo = await API.findArticuloByCode(code);
-    if (!articulo) {
-      toast(`No encontré el producto "${code}"`, 'error');
-      State.modal = 'create';
-      render();
-      return;
-    }
-    addProductToNewBox(articulo);
+    sb = window.supabase.createClient(State.config.url, State.config.anonKey);
   } catch (e) {
-    toast('Error: ' + e.message, 'error');
-    State.modal = 'create';
-    render();
+    sb = null;
+    toast('Error al conectar con Supabase: ' + e.message, 'error');
   }
 }
 
-// =====================================================================
-// IMPRIMIR QR
-// =====================================================================
-export function renderPrintQRModal() {
-  const code = State.cache.printCode;
-  const bodyHtml = `
-    <div class="banner banner-info" style="border:1px solid; margin-bottom:16px;">
-      ${ICON.info}<span>Caja creada · imprimí este QR y pegalo en la caja física</span>
-    </div>
-    <div style="background:#fff; padding:24px; display:flex; flex-direction:column; align-items:center; gap:12px; border:1px solid var(--border);">
-      <canvas id="qr-canvas" style="max-width:100%;"></canvas>
-      <div style="font-family:var(--font-mono); font-size:14px; font-weight:600; color:#000; text-align:center; letter-spacing:-0.01em;">
-        ${escapeHtml(code)}
-      </div>
-    </div>
-    <div style="background:var(--surface-2); padding:14px; margin-top:12px; font-size:12px; line-height:1.6; color:var(--text-2);">
-      <strong style="color:var(--accent);">Cómo imprimir:</strong><br>
-      1. Tomale screenshot a esta pantalla<br>
-      2. Abrí la app <strong>Print Master</strong> (Phomemo M220)<br>
-      3. Importá la imagen o creá un QR con el texto: <span class="mono" style="color:var(--accent); user-select:text;">${escapeHtml(code)}</span><br>
-      4. Imprimí en etiqueta 50×30mm y pegala en la caja
-    </div>
-  `;
-  const footerHtml = `
-    <button class="btn grow" id="copy-code">Copiar código</button>
-    <button class="btn btn-primary grow" id="done-print">Listo</button>
-  `;
-  const modal = modalShell('QR de la caja', bodyHtml, footerHtml);
+export function getSupabase() { return sb; }
 
-  setTimeout(() => {
-    const canvas = modal.querySelector('#qr-canvas');
-    if (canvas && window.QRCode) {
-      window.QRCode.toCanvas(canvas, code, {
-        width: 280, margin: 2,
-        color: { dark: '#000000', light: '#ffffff' },
-        errorCorrectionLevel: 'M'
-      }, () => {});
+// =====================================================================
+// API
+// =====================================================================
+export const API = {
+  // -------------------- USUARIOS --------------------
+  async listUsers(includeInactive = false) {
+    if (isDemoMode()) {
+      return includeInactive
+        ? MOCK.usuarios
+        : MOCK.usuarios.filter(u => u.activo);
     }
-  }, 50);
+    let q = sb.from('usuarios').select('*').order('nombre');
+    if (!includeInactive) q = q.eq('activo', true);
+    const { data, error } = await q;
+    if (error) throw error;
+    return data;
+  },
 
-  modal.querySelector('#copy-code').onclick = () => {
-    navigator.clipboard?.writeText(code).then(
-      () => toast('Código copiado', 'success'),
-      () => toast('No se pudo copiar', 'error')
-    );
-  };
-  modal.querySelector('#done-print').onclick = () => {
-    State.cache.printCode = null;
-    closeModal();
-    State.view = 'cajas';
-    render();
-  };
-  return modal;
-}
-
-// =====================================================================
-// CREAR USUARIO (admin)
-// =====================================================================
-export function renderCreateUserModal() {
-  const bodyHtml = `
-    <p style="font-size:13px; color:var(--muted); margin-bottom:14px;">
-      Solo los administradores pueden crear usuarios nuevos.
-    </p>
-
-    <label class="label">Username</label>
-    <input class="input mono" id="u-username" placeholder="ej. JPEREZ" autocapitalize="characters" maxlength="30" />
-
-    <label class="label" style="margin-top:12px;">Nombre completo</label>
-    <input class="input" id="u-nombre" placeholder="Juan Pérez" />
-
-    <label class="label" style="margin-top:12px;">Email (opcional)</label>
-    <input class="input" type="email" id="u-email" placeholder="jperez@almaceneselrey.com" />
-
-    <label class="label" style="margin-top:12px;">Rol</label>
-    <select class="select" id="u-rol">
-      <option value="operario">Operario — escanear, mover, reducir, reponer</option>
-      <option value="contador">Contador — conteos de inventario</option>
-      <option value="auditor">Auditor — auditorías y verificación</option>
-      <option value="supervisor">Supervisor — todo excepto admin</option>
-      <option value="admin">Admin — acceso total</option>
-    </select>
-
-    <label class="label" style="margin-top:12px;">Contraseña inicial</label>
-    <input class="input" type="password" id="u-pass" placeholder="mínimo 6 caracteres" />
-    <div style="font-size:11px; color:var(--muted); margin-top:4px;">
-      El usuario podrá cambiarla después.
-    </div>
-
-    <div id="u-error" style="color:var(--danger); font-size:13px; margin-top:10px; min-height:18px;"></div>
-  `;
-  const footerHtml = `
-    <button class="btn grow" id="u-cancel">Cancelar</button>
-    <button class="btn btn-primary grow" id="u-save">Crear usuario</button>
-  `;
-  const modal = modalShell('Crear usuario nuevo', bodyHtml, footerHtml);
-
-  const errEl = modal.querySelector('#u-error');
-  modal.querySelector('#u-cancel').onclick = () => { State.modal = null; State.view = 'mas'; render(); };
-  modal.querySelector('#u-save').onclick = async () => {
-    errEl.textContent = '';
-    const username = modal.querySelector('#u-username').value.trim().toUpperCase();
-    const nombre   = modal.querySelector('#u-nombre').value.trim();
-    const email    = modal.querySelector('#u-email').value.trim();
-    const rol      = modal.querySelector('#u-rol').value;
-    const password = modal.querySelector('#u-pass').value;
-
-    if (!isValidUsername(username)) {
-      errEl.textContent = 'Username inválido (3-30 caracteres, empieza con letra, sin espacios)';
-      return;
+  async findUserByUsername(username) {
+    if (isDemoMode()) {
+      return MOCK.usuarios.find(u => u.username === username) || null;
     }
-    if (!nombre) { errEl.textContent = 'Ingresá el nombre completo'; return; }
-    if (!isValidPassword(password)) { errEl.textContent = 'La contraseña debe tener al menos 6 caracteres'; return; }
+    const { data, error } = await sb.from('usuarios').select('*')
+      .eq('username', username).limit(1);
+    if (error) throw error;
+    return data?.[0] || null;
+  },
 
-    try {
-      await API.createUser({
-        username, nombre, email, rol, password,
-        tienda_id: State.user.tienda_id
-      });
-      toast(`Usuario ${username} creado`, 'success');
-      State.modal = null; State.view = 'mas'; render();
-    } catch (e) {
-      errEl.textContent = e.message;
+  async createUser({ username, nombre, email, rol, password, tienda_id }) {
+    const password_hash = await hashPassword(password);
+    if (isDemoMode()) {
+      if (MOCK.usuarios.some(u => u.username === username)) {
+        throw new Error('Ya existe un usuario con ese username');
+      }
+      const newUser = {
+        id: nextId(MOCK.usuarios),
+        username, nombre, email, rol,
+        tienda_id: tienda_id || 1,
+        activo: true, password_hash
+      };
+      MOCK.usuarios.push(newUser);
+      return newUser;
     }
-  };
+    const { data, error } = await sb.from('usuarios').insert({
+      username, nombre, email, rol,
+      tienda_id: tienda_id || 1,
+      activo: true, password_hash,
+      password_set_at: new Date().toISOString()
+    }).select().single();
+    if (error) throw error;
+    return data;
+  },
 
-  return modal;
-}
-
-// =====================================================================
-// EDITAR USUARIO (admin)
-// =====================================================================
-export function renderEditUserModal() {
-  const u = State.cache.editingUser;
-  if (!u) { closeModal(); return $(`<div></div>`); }
-  const isSelf = u.id === State.user.id;
-
-  const bodyHtml = `
-    <div class="box-header" style="margin-bottom:16px;">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-        <div>
-          <div style="font-weight:600; font-size:16px;">${escapeHtml(u.nombre)}</div>
-          <div class="meta mono" style="font-size:12px; color:var(--muted); margin-top:2px;">
-            ${escapeHtml(u.username)} · ${escapeHtml(u.email || 'sin email')}
-          </div>
-        </div>
-        <span class="pill pill-${u.activo ? 'success' : 'muted'}">${u.activo ? 'activo' : 'inactivo'}</span>
-      </div>
-    </div>
-
-    <label class="label">Rol</label>
-    <select class="select" id="e-rol" ${isSelf ? 'disabled' : ''}>
-      <option value="operario"   ${u.rol==='operario'?'selected':''}>Operario</option>
-      <option value="contador"   ${u.rol==='contador'?'selected':''}>Contador</option>
-      <option value="auditor"    ${u.rol==='auditor'?'selected':''}>Auditor</option>
-      <option value="supervisor" ${u.rol==='supervisor'?'selected':''}>Supervisor</option>
-      <option value="admin"      ${u.rol==='admin'?'selected':''}>Admin</option>
-    </select>
-    ${isSelf ? '<div style="font-size:11px; color:var(--muted); margin-top:4px;">No podés cambiar tu propio rol</div>' : ''}
-
-    <div class="divider"></div>
-
-    <label class="label">Resetear contraseña</label>
-    <div style="display:flex; gap:8px;">
-      <input class="input" type="text" id="e-newpass" placeholder="nueva contraseña (mín. 6)" />
-      <button class="btn" id="e-reset">${ICON.refresh}</button>
-    </div>
-    <div style="font-size:11px; color:var(--muted); margin-top:4px;">
-      Comunicale la nueva contraseña al usuario.
-    </div>
-
-    <div class="divider"></div>
-
-    ${!isSelf ? `
-      <button class="btn btn-block ${u.activo ? 'btn-danger' : 'btn-success'}" id="e-toggle">
-        ${u.activo ? `${ICON.lock} Desactivar usuario` : `${ICON.check} Reactivar usuario`}
-      </button>
-    ` : ''}
-
-    <div id="e-error" style="color:var(--danger); font-size:13px; margin-top:10px; min-height:18px;"></div>
-  `;
-  const footerHtml = `
-    <button class="btn grow" id="e-cancel">Cerrar</button>
-    <button class="btn btn-primary grow" id="e-save">Guardar cambios</button>
-  `;
-  const modal = modalShell('Editar usuario', bodyHtml, footerHtml);
-
-  const errEl = modal.querySelector('#e-error');
-  modal.querySelector('#e-cancel').onclick = () => { State.modal = null; State.view = 'mas'; render(); };
-
-  modal.querySelector('#e-reset').onclick = async () => {
-    errEl.textContent = '';
-    const newPass = modal.querySelector('#e-newpass').value;
-    if (!isValidPassword(newPass)) { errEl.textContent = 'Mínimo 6 caracteres'; return; }
-    try {
-      await API.resetUserPassword(u.id, newPass);
-      toast(`Contraseña reseteada para ${u.username}`, 'success');
-      modal.querySelector('#e-newpass').value = '';
-    } catch (e) { errEl.textContent = e.message; }
-  };
-
-  modal.querySelector('#e-toggle')?.addEventListener('click', async () => {
-    const action = u.activo ? 'desactivar' : 'reactivar';
-    if (!confirm(`¿${action.charAt(0).toUpperCase() + action.slice(1)} a ${u.nombre}?`)) return;
-    try {
-      if (u.activo) await API.deactivateUser(u.id);
-      else await API.activateUser(u.id);
-      toast(`Usuario ${action === 'desactivar' ? 'desactivado' : 'reactivado'}`, 'success');
-      State.modal = null; State.view = 'mas'; render();
-    } catch (e) { errEl.textContent = e.message; }
-  });
-
-  modal.querySelector('#e-save').onclick = async () => {
-    errEl.textContent = '';
-    const changes = {};
-    const newRol = modal.querySelector('#e-rol').value;
-    if (!isSelf && newRol !== u.rol) changes.rol = newRol;
-    if (Object.keys(changes).length === 0) {
-      toast('No hay cambios para guardar', 'info');
-      return;
+  async updateUser(id, changes) {
+    if (isDemoMode()) {
+      const u = MOCK.usuarios.find(x => x.id === id);
+      if (!u) throw new Error('Usuario no encontrado');
+      Object.assign(u, changes);
+      return u;
     }
-    try {
-      await API.updateUser(u.id, changes);
-      toast('Usuario actualizado', 'success');
-      State.modal = null; State.view = 'mas'; render();
-    } catch (e) { errEl.textContent = e.message; }
-  };
+    const { data, error } = await sb.from('usuarios').update(changes)
+      .eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+  },
 
-  return modal;
-}
-
-// =====================================================================
-// ESCANEAR PARA BUSCAR — escanea código de barras y va al detalle
-// =====================================================================
-export function renderScanForSearchModal() {
-  const bodyHtml = `
-    <p style="font-size:13px; color:var(--muted); margin-bottom:12px;">
-      Apuntá la cámara al código de barras del producto que querés buscar.
-    </p>
-    <div class="scan-hero" style="margin:0;">
-      <div class="scan-hero-inner">
-        <div id="search-qr-reader"></div>
-        <div class="scan-overlay">
-          <div class="scan-frame">
-            <span></span><span></span>
-            <div class="scan-line"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <label class="label" style="margin-top:16px;">O ingresá el código a mano</label>
-    <div style="display:flex; gap:8px;">
-      <input class="input mono" id="search-manual" placeholder="SKU o código de barras" />
-      <button class="btn" id="search-manual-btn">${ICON.check}</button>
-    </div>
-  `;
-  const footerHtml = `<button class="btn btn-block" id="search-cancel">Volver</button>`;
-  const modal = modalShell('Escanear producto', bodyHtml, footerHtml);
-
-  setTimeout(() => {
-    startScanner('search-qr-reader', handleSearchScanned, {
-      qrbox: { width: 240, height: 160 }
+  async resetUserPassword(id, newPassword) {
+    const password_hash = await hashPassword(newPassword);
+    return this.updateUser(id, {
+      password_hash,
+      password_set_at: new Date().toISOString()
     });
-  }, 100);
+  },
 
-  modal.querySelector('#search-manual-btn').onclick = () => {
-    const v = modal.querySelector('#search-manual').value.trim();
-    if (v) { stopScanner(); handleSearchScanned(v); }
-  };
-  modal.querySelector('#search-manual').onkeydown = e => {
-    if (e.key === 'Enter') {
-      const v = e.target.value.trim();
-      if (v) { stopScanner(); handleSearchScanned(v); }
+  async deactivateUser(id) {
+    return this.updateUser(id, { activo: false });
+  },
+
+  async activateUser(id) {
+    return this.updateUser(id, { activo: true });
+  },
+
+  // -------------------- ARTÍCULOS Y POSICIONES --------------------
+  async listArticulos() {
+    if (isDemoMode()) return MOCK.articulos;
+    const { data, error } = await sb.from('articulos').select('*').order('descripcion');
+    if (error) throw error;
+    return data;
+  },
+
+  async listPosiciones() {
+    if (isDemoMode()) return MOCK.posiciones;
+    const { data, error } = await sb.from('posiciones')
+      .select('id, descripcion, ubicaciones(nombre, tipo)').order('descripcion');
+    if (error) throw error;
+    return data.map(p => ({
+      id: p.id, descripcion: p.descripcion,
+      ubicacion: p.ubicaciones?.nombre, tipo: p.ubicaciones?.tipo
+    }));
+  },
+
+  async findArticuloByCode(code) {
+    const cleaned = (code || '').trim();
+    if (!cleaned) return null;
+    if (isDemoMode()) {
+      return MOCK.articulos.find(a =>
+        a.sku === cleaned || a.codigo_barras === cleaned ||
+        a.descripcion.toLowerCase().includes(cleaned.toLowerCase())
+      ) || null;
     }
-  };
-  modal.querySelector('#search-cancel').onclick = () => {
-    stopScanner();
-    State.modal = null;
-    render();
-  };
+    const { data, error } = await sb.from('articulos').select('*')
+      .or(`codigo_barras.eq.${cleaned},sku.eq.${cleaned}`).limit(1);
+    if (error) throw error;
+    return data?.[0] || null;
+  },
 
-  return modal;
-}
-
-async function handleSearchScanned(code) {
-  try {
-    const articulo = await API.findArticuloByCode(code);
-    if (!articulo) {
-      toast(`No encontré el producto "${code}"`, 'error');
-      State.modal = null;
-      render();
-      return;
+  // Búsqueda flexible de artículos por descripción, SKU, código de barras o familia
+  async searchArticulos(query, limit = 30) {
+    const q = (query || '').trim().toLowerCase();
+    if (!q) return [];
+    if (isDemoMode()) {
+      return MOCK.articulos.filter(a =>
+        a.descripcion.toLowerCase().includes(q) ||
+        (a.sku || '').toLowerCase().includes(q) ||
+        (a.codigo_barras || '').includes(q) ||
+        (a.familia || '').toLowerCase().includes(q)
+      ).slice(0, limit);
     }
-    // Cargar las cajas del producto y mostrarlo en la vista de búsqueda
-    const cajas = await API.findCajasConArticulo(articulo.id, true);
-    State.cache.buscar = State.cache.buscar || {};
-    State.cache.buscar.query = articulo.descripcion;
-    State.cache.buscar.selected = articulo;
-    State.cache.buscar.cajas = cajas;
-    State.cache.buscar.showConsumed = false;
-    State.modal = null;
-    State.view = 'buscar';
-    toast(`${articulo.descripcion} · ${cajas.length} caja(s)`, 'success');
-    render();
-  } catch (e) {
-    toast('Error: ' + e.message, 'error');
-    State.modal = null;
-    render();
+    const { data, error } = await sb.from('articulos').select('*')
+      .or(`descripcion.ilike.%${q}%,sku.ilike.%${q}%,codigo_barras.ilike.%${q}%,familia.ilike.%${q}%`)
+      .limit(limit);
+    if (error) throw error;
+    return data || [];
+  },
+
+  // Buscar todas las cajas que contienen un artículo dado
+  async findCajasConArticulo(articuloId, includeConsumed = true) {
+    if (isDemoMode()) {
+      return MOCK.cajas
+        .filter(c => {
+          if (!includeConsumed && c.estado === 'vacia') return false;
+          return c.contenido?.some(i => i.articulo_id === articuloId);
+        })
+        .map(c => {
+          const item = c.contenido.find(i => i.articulo_id === articuloId);
+          return {
+            id: c.id, codigo_caja: c.codigo_caja,
+            tipo_caja: c.tipo_caja || 'reutilizable',
+            estado: c.estado, fecha_creacion: c.fecha_creacion,
+            fecha_consumida: c.fecha_consumida,
+            posicion: MOCK.posiciones.find(p => p.id === c.posicion_id),
+            cantidad_inicial: item.cantidad_inicial,
+            cantidad_actual: item.cantidad_actual,
+            contenido: c.contenido,
+            unidades_totales: c.contenido.reduce((s, i) => s + i.cantidad_actual, 0)
+          };
+        })
+        .sort((a, b) => b.cantidad_actual - a.cantidad_actual);
+    }
+    let q = sb.from('caja_contenido').select(`
+      cantidad_inicial, cantidad_actual,
+      cajas(id, codigo_caja, tipo_caja, estado, fecha_creacion, fecha_consumida,
+            posiciones(id, descripcion, ubicaciones(nombre, tipo)),
+            caja_contenido(articulo_id, cantidad_inicial, cantidad_actual))
+    `).eq('articulo_id', articuloId);
+    const { data, error } = await q;
+    if (error) throw error;
+    return (data || [])
+      .filter(row => row.cajas && (includeConsumed || row.cajas.estado !== 'vacia'))
+      .map(row => ({
+        id: row.cajas.id,
+        codigo_caja: row.cajas.codigo_caja,
+        tipo_caja: row.cajas.tipo_caja || 'reutilizable',
+        estado: row.cajas.estado,
+        fecha_creacion: row.cajas.fecha_creacion,
+        fecha_consumida: row.cajas.fecha_consumida,
+        posicion: row.cajas.posiciones ? {
+          id: row.cajas.posiciones.id,
+          descripcion: row.cajas.posiciones.descripcion,
+          ubicacion: row.cajas.posiciones.ubicaciones?.nombre,
+          tipo: row.cajas.posiciones.ubicaciones?.tipo
+        } : null,
+        cantidad_inicial: row.cantidad_inicial,
+        cantidad_actual: row.cantidad_actual,
+        contenido: row.cajas.caja_contenido,
+        unidades_totales: row.cajas.caja_contenido.reduce((s, i) => s + i.cantidad_actual, 0)
+      }))
+      .sort((a, b) => b.cantidad_actual - a.cantidad_actual);
+  },
+
+  // -------------------- CAJAS --------------------
+  async listCajas(includeConsumed = false) {
+    if (isDemoMode()) {
+      return MOCK.cajas
+        .filter(c => includeConsumed || c.estado !== 'vacia')
+        .map(c => ({
+          ...c,
+          tipo_caja: c.tipo_caja || 'reutilizable',
+          posicion: MOCK.posiciones.find(p => p.id === c.posicion_id),
+          unidades_totales: c.contenido.reduce((s, i) => s + i.cantidad_actual, 0)
+        }));
+    }
+    let q = sb.from('cajas').select(`
+      id, codigo_caja, tipo_caja, fecha_creacion, fecha_consumida, estado,
+      posiciones(id, descripcion, ubicaciones(nombre, tipo)),
+      caja_contenido(articulo_id, cantidad_inicial, cantidad_actual,
+                     articulos(sku, descripcion, unidades_por_caja))
+    `).order('fecha_creacion', { ascending: false });
+    if (!includeConsumed) q = q.neq('estado', 'vacia');
+    const { data: cajas, error } = await q;
+    if (error) throw error;
+    return cajas.map(c => ({
+      id: c.id, codigo_caja: c.codigo_caja,
+      tipo_caja: c.tipo_caja || 'reutilizable',
+      fecha_creacion: c.fecha_creacion,
+      fecha_consumida: c.fecha_consumida,
+      estado: c.estado,
+      posicion: c.posiciones ? {
+        id: c.posiciones.id, descripcion: c.posiciones.descripcion,
+        ubicacion: c.posiciones.ubicaciones?.nombre,
+        tipo: c.posiciones.ubicaciones?.tipo
+      } : null,
+      contenido: c.caja_contenido,
+      unidades_totales: c.caja_contenido.reduce((s, i) => s + i.cantidad_actual, 0)
+    }));
+  },
+
+  async getCajaByCode(codigo) {
+    const cajas = await this.listCajas(true);
+    return cajas.find(c => c.codigo_caja === codigo);
+  },
+
+  async createCaja({ codigo_caja, tipo_caja, posicion_id, items, motivo }) {
+    if (isDemoMode()) {
+      const newId = nextId(MOCK.cajas);
+      const newCaja = {
+        id: newId, codigo_caja,
+        tipo_caja: tipo_caja || 'reutilizable',
+        estado: 'activa', posicion_id,
+        fecha_creacion: new Date().toISOString(),
+        contenido: items.map(it => ({
+          articulo_id: it.articulo_id,
+          cantidad_inicial: it.cantidad,
+          cantidad_actual: it.cantidad
+        }))
+      };
+      MOCK.cajas.unshift(newCaja);
+      const movId = nextId(MOCK.movimientos);
+      MOCK.movimientos.unshift({
+        id: movId, tipo: 'crear_caja', caja_id: newId,
+        articulo_id: null, cantidad: null,
+        posicion_destino_id: posicion_id,
+        usuario_id: State.user.id,
+        motivo: motivo || 'Caja iniciada',
+        creado_at: new Date().toISOString()
+      });
+      items.forEach((it, i) => {
+        MOCK.movimientos.unshift({
+          id: movId + i + 1, tipo: 'agregar_articulo',
+          caja_id: newId, articulo_id: it.articulo_id,
+          cantidad: it.cantidad, usuario_id: State.user.id,
+          motivo: 'Carga inicial',
+          creado_at: new Date().toISOString()
+        });
+      });
+      return newCaja;
+    }
+    const { data: caja, error } = await sb.from('cajas').insert({
+      codigo_caja, posicion_id,
+      tipo_caja: tipo_caja || 'reutilizable',
+      creada_por: State.user.id, estado: 'activa'
+    }).select().single();
+    if (error) throw error;
+    if (items.length) {
+      const { error: e2 } = await sb.from('caja_contenido').insert(
+        items.map(it => ({
+          caja_id: caja.id, articulo_id: it.articulo_id,
+          cantidad_inicial: it.cantidad, cantidad_actual: it.cantidad
+        }))
+      );
+      if (e2) throw e2;
+    }
+    await sb.from('movimientos').insert({
+      tipo: 'crear_caja', caja_id: caja.id,
+      posicion_destino_id: posicion_id,
+      usuario_id: State.user.id,
+      motivo: motivo || 'Caja iniciada'
+    });
+    if (items.length) {
+      await sb.from('movimientos').insert(items.map(it => ({
+        tipo: 'agregar_articulo', caja_id: caja.id,
+        articulo_id: it.articulo_id, cantidad: it.cantidad,
+        usuario_id: State.user.id, motivo: 'Carga inicial'
+      })));
+    }
+    return caja;
+  },
+
+  async consumirCaja(cajaId, motivo) {
+    const ahora = new Date().toISOString();
+    if (isDemoMode()) {
+      const caja = MOCK.cajas.find(c => c.id === cajaId);
+      if (caja) { caja.estado = 'vacia'; caja.fecha_consumida = ahora; }
+      MOCK.movimientos.unshift({
+        id: nextId(MOCK.movimientos), tipo: 'consumir_caja', caja_id: cajaId,
+        articulo_id: null, cantidad: null, usuario_id: State.user.id,
+        motivo: motivo || 'Caja vacía — marcada como consumida', creado_at: ahora
+      });
+      return true;
+    }
+    const { error } = await sb.from('cajas').update({
+      estado: 'vacia', fecha_consumida: ahora, consumida_por: State.user.id
+    }).eq('id', cajaId);
+    if (error) throw error;
+    await sb.from('movimientos').insert({
+      tipo: 'consumir_caja', caja_id: cajaId,
+      usuario_id: State.user.id,
+      motivo: motivo || 'Caja vacía — marcada como consumida'
+    });
+    return true;
+  },
+
+  // -------------------- MOVIMIENTOS --------------------
+  async listMovimientos(limit = 50) {
+    if (isDemoMode()) {
+      return MOCK.movimientos.slice(0, limit).map(m => ({
+        ...m,
+        caja: MOCK.cajas.find(c => c.id === m.caja_id),
+        articulo: MOCK.articulos.find(a => a.id === m.articulo_id),
+        usuario: MOCK.usuarios.find(u => u.id === m.usuario_id)
+      }));
+    }
+    const { data, error } = await sb.from('movimientos').select(`
+      *, cajas(codigo_caja), articulos(sku, descripcion), usuarios(nombre, username)
+    `).order('creado_at', { ascending: false }).limit(limit);
+    if (error) throw error;
+    return data.map(m => ({
+      ...m, caja: m.cajas, articulo: m.articulos, usuario: m.usuarios
+    }));
+  },
+
+  async createMovimiento(mov) {
+    if (isDemoMode()) {
+      const newId = nextId(MOCK.movimientos);
+      MOCK.movimientos.unshift({ ...mov, id: newId, creado_at: new Date().toISOString() });
+      if (mov.tipo === 'reducir' || mov.tipo === 'aumentar') {
+        const caja = MOCK.cajas.find(c => c.id === mov.caja_id);
+        const item = caja?.contenido.find(i => i.articulo_id === mov.articulo_id);
+        if (item) {
+          if (mov.tipo === 'reducir') item.cantidad_actual = Math.max(0, item.cantidad_actual - mov.cantidad);
+          else item.cantidad_actual += mov.cantidad;
+        }
+      } else if (mov.tipo === 'trasladar_caja') {
+        const caja = MOCK.cajas.find(c => c.id === mov.caja_id);
+        if (caja) caja.posicion_id = mov.posicion_destino_id;
+      }
+      return { id: newId };
+    }
+    const { data, error } = await sb.from('movimientos').insert(mov).select().single();
+    if (error) throw error;
+    if (mov.tipo === 'reducir' || mov.tipo === 'aumentar') {
+      const { data: cc } = await sb.from('caja_contenido')
+        .select('cantidad_actual').eq('caja_id', mov.caja_id).eq('articulo_id', mov.articulo_id).single();
+      if (cc) {
+        const newQty = mov.tipo === 'reducir'
+          ? Math.max(0, cc.cantidad_actual - mov.cantidad)
+          : cc.cantidad_actual + mov.cantidad;
+        await sb.from('caja_contenido').update({
+          cantidad_actual: newQty, ultima_modificacion: new Date().toISOString()
+        }).eq('caja_id', mov.caja_id).eq('articulo_id', mov.articulo_id);
+      }
+    } else if (mov.tipo === 'trasladar_caja') {
+      await sb.from('cajas').update({ posicion_id: mov.posicion_destino_id }).eq('id', mov.caja_id);
+    }
+    return data;
+  },
+
+  async listMovimientosByCaja(cajaId) {
+    if (isDemoMode()) {
+      return MOCK.movimientos.filter(m => m.caja_id === cajaId).map(m => ({
+        ...m,
+        articulo: MOCK.articulos.find(a => a.id === m.articulo_id),
+        usuario: MOCK.usuarios.find(u => u.id === m.usuario_id)
+      }));
+    }
+    const { data, error } = await sb.from('movimientos').select(`
+      *, articulos(sku, descripcion), usuarios(nombre, username)
+    `).eq('caja_id', cajaId).order('creado_at', { ascending: false });
+    if (error) throw error;
+    return data.map(m => ({ ...m, articulo: m.articulos, usuario: m.usuarios }));
   }
-}
+};

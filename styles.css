@@ -1,249 +1,558 @@
--- =====================================================================
--- SCHEMA: Sistema de Inventario por Ubicación - Piloto El Rey
--- Para ejecutar en Supabase SQL Editor
--- =====================================================================
+/* =====================================================================
+   styles.css — Inventario El Rey · Piloto
+   Dark theme | IBM Plex | Mobile-first PWA
+===================================================================== */
 
--- Limpieza opcional (descomentar si querés empezar de cero)
--- DROP TABLE IF EXISTS movimientos CASCADE;
--- DROP TABLE IF EXISTS caja_contenido CASCADE;
--- DROP TABLE IF EXISTS cajas CASCADE;
--- DROP TABLE IF EXISTS posiciones CASCADE;
--- DROP TABLE IF EXISTS ubicaciones CASCADE;
--- DROP TABLE IF EXISTS articulos CASCADE;
--- DROP TABLE IF EXISTS usuarios CASCADE;
--- DROP TABLE IF EXISTS tiendas CASCADE;
--- DROP TABLE IF EXISTS alertas CASCADE;
+/* ---- Variables -------------------------------------------------------- */
+:root {
+  --bg:        #0a0a0a;
+  --surface:   #111111;
+  --surface-2: #1a1a1a;
+  --border:    #222222;
+  --border-2:  #2c2c2c;
+  --text:      #e8e8e8;
+  --muted:     #888888;
+  --muted-2:   #555555;
+  --accent:    #f5b800;
+  --accent-2:  #d4a000;
+  --success:   #22c55e;
+  --danger:    #ef4444;
+  --info:      #3b82f6;
+  --warn:      #f5b800;
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+}
 
--- =====================================================================
--- TABLAS PRINCIPALES
--- =====================================================================
+/* ---- Reset ------------------------------------------------------------ */
+*, *::before, *::after { box-sizing: border-box; }
+* { margin: 0; padding: 0; }
 
-CREATE TABLE tiendas (
-  id          SERIAL PRIMARY KEY,
-  codigo      TEXT NOT NULL UNIQUE,
-  nombre      TEXT NOT NULL,
-  activa      BOOLEAN DEFAULT TRUE,
-  creada_at   TIMESTAMPTZ DEFAULT NOW()
-);
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
 
-CREATE TABLE usuarios (
-  id              SERIAL PRIMARY KEY,
-  username        TEXT NOT NULL UNIQUE,
-  nombre          TEXT NOT NULL,
-  email           TEXT,
-  rol             TEXT NOT NULL CHECK (rol IN ('admin', 'supervisor', 'operario', 'contador', 'auditor')),
-  tienda_id       INTEGER REFERENCES tiendas(id),
-  password_hash   TEXT,                                    -- SHA-256 hex
-  password_set_at TIMESTAMPTZ,
-  ultimo_login    TIMESTAMPTZ,
-  activo          BOOLEAN DEFAULT TRUE,
-  creado_at       TIMESTAMPTZ DEFAULT NOW()
-);
+body {
+  display: flex;
+  flex-direction: column;
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
 
-CREATE TABLE ubicaciones (
-  id          SERIAL PRIMARY KEY,
-  tienda_id   INTEGER NOT NULL REFERENCES tiendas(id),
-  tipo        TEXT NOT NULL CHECK (tipo IN ('corona', 'bodega', 'exhibicion')),
-  nombre      TEXT NOT NULL,
-  qr_code     TEXT UNIQUE,
-  UNIQUE(tienda_id, nombre)
-);
+button { cursor: pointer; border: none; background: none; font-family: inherit; font-size: inherit; color: inherit; }
+input, textarea, select { font-family: inherit; font-size: inherit; }
+a { color: var(--accent); }
 
-CREATE TABLE posiciones (
-  id            SERIAL PRIMARY KEY,
-  ubicacion_id  INTEGER NOT NULL REFERENCES ubicaciones(id),
-  pasillo       TEXT,
-  estante       TEXT,
-  nivel         TEXT,
-  qr_code       TEXT UNIQUE,
-  descripcion   TEXT GENERATED ALWAYS AS (
-    COALESCE(pasillo, '') || '-' || COALESCE(estante, '') || '-' || COALESCE(nivel, '')
-  ) STORED
-);
+/* ---- App root --------------------------------------------------------- */
+#app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
 
-CREATE TABLE articulos (
-  id                 SERIAL PRIMARY KEY,
-  codigo_barras      TEXT UNIQUE,
-  sku                TEXT,
-  descripcion        TEXT NOT NULL,
-  familia            TEXT,              -- categoría: iluminación, eléctrico, ferretería, etc.
-  unidad_medida      TEXT DEFAULT 'unidad',
-  unidades_por_caja  INTEGER,           -- capacidad estándar de la caja del proveedor (referencia)
-  activo             BOOLEAN DEFAULT TRUE
-);
+/* ---- Toast ------------------------------------------------------------ */
+#toast-container {
+  position: fixed;
+  bottom: 76px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+  width: 90%;
+  max-width: 400px;
+}
 
-CREATE TABLE cajas (
-  id              SERIAL PRIMARY KEY,
-  codigo_caja     TEXT NOT NULL UNIQUE,
-  tipo_caja       TEXT NOT NULL DEFAULT 'reutilizable'
-                  CHECK (tipo_caja IN ('producto', 'reutilizable')),
-  posicion_id     INTEGER REFERENCES posiciones(id),
-  estado          TEXT NOT NULL DEFAULT 'activa'
-                  CHECK (estado IN ('activa','vacia','transito','archivada')),
-  creada_por      INTEGER REFERENCES usuarios(id),
-  fecha_creacion  TIMESTAMPTZ DEFAULT NOW(),
-  fecha_consumida TIMESTAMPTZ,           -- cuándo se marcó como vacía
-  consumida_por   INTEGER REFERENCES usuarios(id),
-  notas           TEXT
-);
+.toast {
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+  animation: toast-in 0.2s ease;
+}
 
-CREATE TABLE caja_contenido (
-  id                  SERIAL PRIMARY KEY,
-  caja_id             INTEGER NOT NULL REFERENCES cajas(id) ON DELETE CASCADE,
-  articulo_id         INTEGER NOT NULL REFERENCES articulos(id),
-  cantidad_inicial    INTEGER NOT NULL CHECK (cantidad_inicial >= 0),
-  cantidad_actual     INTEGER NOT NULL CHECK (cantidad_actual >= 0),
-  ultima_modificacion TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(caja_id, articulo_id)
-);
+.toast-success { background: var(--success); color: #fff; }
+.toast-error   { background: var(--danger);  color: #fff; }
+.toast-info    { background: var(--surface-2); color: var(--text); border: 1px solid var(--border-2); }
 
-CREATE TABLE movimientos (
-  id                  BIGSERIAL PRIMARY KEY,
-  tipo                TEXT NOT NULL CHECK (tipo IN (
-                        'crear_caja','agregar_articulo','reducir',
-                        'aumentar','trasladar_caja','transferir_tienda',
-                        'recibir','conteo','ajuste','consumir_caja'
-                      )),
-  caja_id             INTEGER REFERENCES cajas(id),
-  articulo_id         INTEGER REFERENCES articulos(id),
-  cantidad            INTEGER,
-  posicion_origen_id  INTEGER REFERENCES posiciones(id),
-  posicion_destino_id INTEGER REFERENCES posiciones(id),
-  tienda_origen_id    INTEGER REFERENCES tiendas(id),
-  tienda_destino_id   INTEGER REFERENCES tiendas(id),
-  usuario_id          INTEGER REFERENCES usuarios(id),
-  motivo              TEXT,
-  notas               TEXT,
-  creado_at           TIMESTAMPTZ DEFAULT NOW()
-);
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
-CREATE TABLE alertas (
-  id                  SERIAL PRIMARY KEY,
-  tipo                TEXT NOT NULL CHECK (tipo IN (
-                        'stock_bajo','transferencia_sugerida','caja_inactiva',
-                        'inventario_fantasma','conteo_desviado'
-                      )),
-  prioridad           TEXT NOT NULL DEFAULT 'media'
-                      CHECK (prioridad IN ('baja','media','alta','critica')),
-  estado              TEXT NOT NULL DEFAULT 'activa'
-                      CHECK (estado IN ('activa','atendida','descartada')),
-  mensaje             TEXT NOT NULL,
-  tienda_origen_id    INTEGER REFERENCES tiendas(id),
-  tienda_destino_id   INTEGER REFERENCES tiendas(id),
-  articulo_id         INTEGER REFERENCES articulos(id),
-  caja_id             INTEGER REFERENCES cajas(id),
-  cantidad_sugerida   INTEGER,
-  creada_at           TIMESTAMPTZ DEFAULT NOW(),
-  atendida_at         TIMESTAMPTZ,
-  atendida_por        INTEGER REFERENCES usuarios(id)
-);
+/* ---- Loader ----------------------------------------------------------- */
+.loader {
+  width: 20px; height: 20px;
+  border: 2px solid var(--border-2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.65s linear infinite;
+  display: inline-block;
+}
 
--- =====================================================================
--- ÍNDICES
--- =====================================================================
-CREATE INDEX idx_cajas_codigo      ON cajas(codigo_caja);
-CREATE INDEX idx_cajas_posicion    ON cajas(posicion_id);
-CREATE INDEX idx_contenido_caja    ON caja_contenido(caja_id);
-CREATE INDEX idx_movimientos_caja  ON movimientos(caja_id);
-CREATE INDEX idx_movimientos_fecha ON movimientos(creado_at DESC);
-CREATE INDEX idx_alertas_estado    ON alertas(estado, prioridad);
+@keyframes spin { to { transform: rotate(360deg); } }
 
--- =====================================================================
--- VISTA ÚTIL: caja con contenido y ubicación
--- =====================================================================
-CREATE OR REPLACE VIEW v_cajas_completo AS
-SELECT
-  c.id, c.codigo_caja, c.estado, c.fecha_creacion,
-  t.nombre AS tienda, u.nombre AS ubicacion, u.tipo AS ubicacion_tipo,
-  p.descripcion AS posicion,
-  COALESCE(SUM(cc.cantidad_actual), 0) AS unidades_totales,
-  COUNT(cc.articulo_id) AS articulos_distintos,
-  usr.nombre AS creada_por
-FROM cajas c
-LEFT JOIN posiciones p   ON p.id = c.posicion_id
-LEFT JOIN ubicaciones u  ON u.id = p.ubicacion_id
-LEFT JOIN tiendas t      ON t.id = u.tienda_id
-LEFT JOIN caja_contenido cc ON cc.caja_id = c.id
-LEFT JOIN usuarios usr   ON usr.id = c.creada_por
-GROUP BY c.id, t.nombre, u.nombre, u.tipo, p.descripcion, usr.nombre;
+/* ---- Layout ----------------------------------------------------------- */
+.fullscreen {
+  display: flex;
+  flex-direction: column;
+  padding: 32px 20px 28px;
+  min-height: 100dvh;
+  overflow-y: auto;
+}
 
--- =====================================================================
--- VISTA: cajas consumidas (analytics)
--- Cuántas cajas se consumieron, agrupadas por mes y artículo
--- =====================================================================
-CREATE OR REPLACE VIEW v_consumo_cajas AS
-SELECT
-  DATE_TRUNC('month', c.fecha_consumida) AS mes,
-  c.tipo_caja,
-  a.id AS articulo_id, a.descripcion AS articulo,
-  COUNT(DISTINCT c.id) AS cajas_consumidas,
-  SUM(cc.cantidad_inicial) AS unidades_totales
-FROM cajas c
-JOIN caja_contenido cc ON cc.caja_id = c.id
-JOIN articulos a ON a.id = cc.articulo_id
-WHERE c.estado = 'vacia' AND c.fecha_consumida IS NOT NULL
-GROUP BY DATE_TRUNC('month', c.fecha_consumida), c.tipo_caja, a.id, a.descripcion
-ORDER BY mes DESC, unidades_totales DESC;
+main {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 8px;
+}
 
--- =====================================================================
--- DATOS DE PRUEBA (descomentar para poblar con datos demo)
--- =====================================================================
+/* ---- Topbar ----------------------------------------------------------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  flex-shrink: 0;
+}
 
-INSERT INTO tiendas (codigo, nombre) VALUES
-  ('A01', 'Alajuela Centro'),
-  ('H01', 'Heredia');
+.brand { display: flex; align-items: center; gap: 10px; }
 
--- Hashes SHA-256 reales de las contraseñas demo (cambialos en producción):
-INSERT INTO usuarios (username, nombre, email, rol, tienda_id, password_hash) VALUES
-  ('SSEGURA',  'Steven Segura',   'ssegura@almaceneselrey.com',   'admin',      1, '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9'),  -- admin123
-  ('MROJAS',   'María Rojas',     'mrojas@almaceneselrey.com',    'supervisor', 1, '4e4c56e4a15f89f05c2f4c72613da2a18c9665d4f0d6acce16415eb06f9be776'),  -- super123
-  ('JMARTINEZ','Juan Martínez',   'jmartinez@almaceneselrey.com', 'operario',   1, '13a93f9a5502e71eed80a806f87bc4424e03e6b0d90acd513ea9d561c853b738'),  -- oper123
-  ('CCONTADOR','Carlos Contador', 'ccontador@almaceneselrey.com', 'contador',   1, '1c11a11a7ec81e9a11e258ba6191885e10ec0a16d67c1bf499838376111e6313'),  -- cont123
-  ('AUDITOR',  'Ana Auditora',    'aauditora@almaceneselrey.com', 'auditor',    1, '0b26f7caa1c2e5e3f11adfd22f47403ed214a1d4451117a18ea726b451a3aa61'); -- audit123
+.brand-mark {
+  width: 30px; height: 30px;
+  background: var(--accent);
+  color: #000;
+  font-weight: 700;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
 
-INSERT INTO ubicaciones (tienda_id, tipo, nombre, qr_code) VALUES
-  (1, 'corona',     'Corona',     'ELRY-A01-UB-CORONA'),
-  (1, 'bodega',     'Bodega 1',   'ELRY-A01-UB-BOD1'),
-  (1, 'exhibicion', 'Exhibición', 'ELRY-A01-UB-EXH');
+.brand-name { font-weight: 600; font-size: 14px; }
+.brand-sub  { font-size: 10px; color: var(--muted); font-family: var(--font-mono); line-height: 1.2; }
 
-INSERT INTO posiciones (ubicacion_id, pasillo, estante, nivel, qr_code) VALUES
-  (1, 'P1', 'E1', 'N1', 'ELRY-A01-PS-CR-P1E1N1'),
-  (1, 'P1', 'E2', 'N1', 'ELRY-A01-PS-CR-P1E2N1'),
-  (2, 'P3', 'E2', 'N2', 'ELRY-A01-PS-B1-P3E2N2'),
-  (2, 'P5', 'E1', 'N1', 'ELRY-A01-PS-B1-P5E1N1'),
-  (3, 'V1', 'E1', 'N1', 'ELRY-A01-PS-EX-V1E1N1');
+.user-chip {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 5px 10px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
 
-INSERT INTO articulos (codigo_barras, sku, descripcion, unidades_por_caja) VALUES
-  ('7501234500011', 'CAN-001', 'Candil LED 60W blanco',         20),
-  ('7501234500028', 'CAN-002', 'Candil LED 40W cálido',         24),
-  ('7501234500035', 'CAN-003', 'Candil LED solar exterior',     12),
-  ('7501234500042', 'BOM-001', 'Bombillo halógeno 100W',        50),
-  ('7501234500059', 'EXT-001', 'Extensión eléctrica 3 m',       NULL);
+.dot {
+  width: 6px; height: 6px;
+  background: var(--success);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
 
-INSERT INTO cajas (codigo_caja, tipo_caja, posicion_id, creada_por) VALUES
-  ('ELRY-A01-CJ-A7B2K9M4', 'producto',     1, 1),
-  ('ELRY-A01-CJ-B3D5F7H1', 'producto',     3, 1),
-  ('ELRY-A01-CJ-X9Y8Z7W6', 'reutilizable', 5, 2);
+/* ---- Bottom tabs ------------------------------------------------------ */
+.tabs {
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
+  flex-shrink: 0;
+}
 
-INSERT INTO caja_contenido (caja_id, articulo_id, cantidad_inicial, cantidad_actual) VALUES
-  (1, 1, 20, 1),    -- Caja 1: 20 candiles, queda 1 (ejemplo del documento)
-  (1, 2, 10, 7),
-  (2, 3, 30, 30),
-  (2, 4, 15, 12),
-  (3, 5, 25, 18);
+.tabs button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 9px 4px 8px;
+  font-size: 10px;
+  color: var(--muted);
+  border-right: 1px solid var(--border);
+  transition: background 0.12s;
+  min-height: 52px;
+}
 
-INSERT INTO movimientos (tipo, caja_id, articulo_id, cantidad, posicion_destino_id, usuario_id, motivo) VALUES
-  ('crear_caja',  1, NULL, NULL, 1, 1, 'Recepción de proveedor'),
-  ('reducir',     1, 1,    19,   NULL, 3, 'Venta'),
-  ('reducir',     1, 2,     3,   NULL, 3, 'Venta'),
-  ('crear_caja',  2, NULL, NULL, 3, 1, 'Recepción de proveedor'),
-  ('reducir',     2, 4,     3,   NULL, 2, 'Venta'),
-  ('crear_caja',  3, NULL, NULL, 5, 2, 'Reposición exhibición'),
-  ('reducir',     3, 5,     7,   NULL, 3, 'Venta');
+.tabs button:last-child { border-right: 0; }
+.tabs button.active { color: var(--accent); background: rgba(245,184,0,0.06); }
+.tabs button svg { width: 20px; height: 20px; }
 
-INSERT INTO alertas (tipo, prioridad, mensaje, articulo_id, caja_id, cantidad_sugerida) VALUES
-  ('stock_bajo', 'alta', 'Caja con 1 unidad de Candil LED 60W — reposición sugerida', 1, 1, 20);
+/* ---- Section ---------------------------------------------------------- */
+.section { padding: 14px 16px; }
 
--- =====================================================================
--- FIN DEL SCRIPT
--- =====================================================================
+.section-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.section-title small {
+  font-size: 10px;
+  color: var(--muted-2);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+
+/* ---- Card ------------------------------------------------------------- */
+.card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 14px;
+}
+
+/* ---- Stack ------------------------------------------------------------ */
+.stack { display: flex; flex-direction: column; gap: 4px; }
+
+/* ---- List item -------------------------------------------------------- */
+.list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  transition: background 0.1s;
+  width: 100%;
+  text-align: left;
+}
+
+.list-item:active { background: var(--surface-2); }
+
+.icon-box {
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.icon-box svg { width: 17px; height: 17px; }
+
+.grow { flex: 1; min-width: 0; }
+
+.qty { text-align: right; flex-shrink: 0; }
+.qty-big { font-size: 18px; font-weight: 700; font-family: var(--font-mono); line-height: 1; }
+.qty-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+/* ---- Meta / mono / truncate ------------------------------------------ */
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 8px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 3px;
+  align-items: center;
+}
+
+.mono { font-family: var(--font-mono); }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- Pills ------------------------------------------------------------ */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.pill svg { width: 11px; height: 11px; }
+
+.pill-warn    { background: rgba(245,184,0,0.12); color: var(--warn);    border: 1px solid rgba(245,184,0,0.28); }
+.pill-success { background: rgba(34,197,94,0.1);  color: var(--success); border: 1px solid rgba(34,197,94,0.24); }
+.pill-info    { background: rgba(59,130,246,0.1); color: var(--info);    border: 1px solid rgba(59,130,246,0.24); }
+.pill-danger  { background: rgba(239,68,68,0.1);  color: var(--danger);  border: 1px solid rgba(239,68,68,0.24); }
+.pill-muted   { background: var(--surface-2);     color: var(--muted);   border: 1px solid var(--border); }
+
+/* ---- Empty state ------------------------------------------------------- */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--muted);
+  gap: 8px;
+}
+
+.empty svg { width: 30px; height: 30px; opacity: 0.35; }
+.empty h3  { font-size: 14px; font-weight: 600; color: var(--text); }
+.empty p   { font-size: 12px; line-height: 1.5; }
+
+/* ---- Forms ------------------------------------------------------------ */
+.label {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  margin-bottom: 5px;
+}
+
+.input {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  color: var(--text);
+  outline: none;
+  font-size: 14px;
+  transition: border-color 0.15s;
+  -webkit-appearance: none;
+}
+
+.input:focus        { border-color: var(--accent); }
+.input::placeholder { color: var(--muted-2); }
+
+/* ---- Buttons ---------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: opacity 0.15s, background 0.12s;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+.btn:disabled { opacity: 0.4; pointer-events: none; }
+
+.btn-primary { background: var(--accent); color: #000; }
+.btn-primary:active { background: var(--accent-2); }
+
+.btn-ghost { background: var(--surface-2); color: var(--text); border: 1px solid var(--border-2); }
+.btn-ghost:active { background: var(--surface); }
+
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-danger:active { opacity: 0.82; }
+
+.btn-block { width: 100%; }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+
+/* ---- Scan view -------------------------------------------------------- */
+.scan-hero {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.scan-hero-inner {
+  position: relative;
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scan-idle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 20px;
+  gap: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.scan-idle svg { width: 42px; height: 42px; color: var(--accent); }
+
+.scan-input-row {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+/* QR reader overrides */
+#qr-reader { width: 100% !important; border: none !important; }
+#qr-reader video { width: 100% !important; object-fit: cover; }
+#qr-reader__scan_region { border: none !important; background: transparent !important; }
+#qr-reader__dashboard { display: none !important; }
+
+.scan-overlay {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+
+.scan-frame {
+  width: 200px; height: 200px;
+  position: relative;
+}
+
+.scan-frame span {
+  position: absolute;
+  width: 22px; height: 22px;
+  border-color: var(--accent);
+  border-style: solid;
+}
+
+.scan-frame span:nth-child(1) { top: 0; left: 0;  border-width: 3px 0 0 3px; }
+.scan-frame span:nth-child(2) { top: 0; right: 0; border-width: 3px 3px 0 0; }
+
+.scan-line {
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.8;
+  animation: scan-move 1.8s ease-in-out infinite;
+}
+
+@keyframes scan-move {
+  0%, 100% { top: 8%;  }
+  50%       { top: 88%; }
+}
+
+/* ---- Modals ----------------------------------------------------------- */
+.modal {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.72);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+}
+
+.modal-inner {
+  background: var(--surface);
+  width: 100%;
+  max-height: 92dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-top: 1px solid var(--border);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.modal-header h2 { font-size: 15px; font-weight: 600; }
+
+.modal-body { overflow-y: auto; flex: 1; }
+
+.modal-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ---- Box header ------------------------------------------------------- */
+.box-header {
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ---- Login brand ------------------------------------------------------ */
+.brand-large {
+  text-align: center;
+  margin-bottom: 28px;
+  padding-top: 16px;
+}
+
+.brand-large .mark {
+  width: 52px; height: 52px;
+  background: var(--accent);
+  color: #000;
+  font-size: 20px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.brand-large h1 { font-size: 20px; font-weight: 700; }
+.brand-large p  { font-size: 11px; color: var(--muted); font-family: var(--font-mono); margin-top: 4px; }
+
+/* ---- Banner ----------------------------------------------------------- */
+.banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.banner svg { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; }
+.banner-warn { color: var(--warn); border-color: rgba(245,184,0,0.28) !important; background: rgba(245,184,0,0.06); }
+
+/* ---- Setting row ------------------------------------------------------ */
+.setting-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  transition: background 0.1s;
+}
+
+.setting-row:active { background: var(--surface-2); }
+.setting-row svg { width: 19px; height: 19px; color: var(--muted); flex-shrink: 0; }
+
+/* ---- Demo badge ------------------------------------------------------- */
+.demo-badge {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  background: var(--warn);
+  color: #000;
+  padding: 2px 8px;
+  font-size: 9px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  z-index: 50;
+  pointer-events: none;
+}
+
+/* ---- Movement type colors --------------------------------------------- */
+.mov-icon-reducir    { color: var(--danger);  }
+.mov-icon-aumentar   { color: var(--success); }
+.mov-icon-crear      { color: var(--accent);  }
+.mov-icon-trasladar  { color: var(--info);    }

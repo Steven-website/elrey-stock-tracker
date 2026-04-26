@@ -1,50 +1,89 @@
 // =====================================================================
-// state.js — estado global de la aplicación + storage seguro
+// main.js — punto de entrada de la aplicación
 // =====================================================================
 
-// Storage con fallback en memoria si localStorage falla (incógnito, sandbox)
-export const Storage = {
-  _mem: {},
-  get(key) {
-    try {
-      const v = localStorage.getItem(key);
-      return v ? JSON.parse(v) : null;
-    } catch (e) {
-      return this._mem[key] || null;
-    }
-  },
-  set(key, val) {
-    try { localStorage.setItem(key, JSON.stringify(val)); }
-    catch (e) { this._mem[key] = val; }
-  },
-  remove(key) {
-    try { localStorage.removeItem(key); }
-    catch (e) { delete this._mem[key]; }
+import { State, isDemoMode } from './state.js';
+import { initSupabase } from './api.js';
+import { initMockPasswords } from './mock.js';
+import { stopScanner } from './scanner.js';
+import { $ } from './utils.js';
+import {
+  renderLogin, renderShell
+} from './views.js';
+import {
+  renderBoxModal, renderConfigModal,
+  renderReduceModal, renderIncreaseModal,
+  renderMoveModal, renderHistoryModal,
+  renderCreateBoxModal, renderScanProductModal,
+  renderPrintQRModal,
+  renderCreateUserModal, renderEditUserModal,
+  renderScanForSearchModal
+} from './modals.js';
+
+// =====================================================================
+// RENDER (función central)
+// =====================================================================
+export function render() {
+  const root = document.getElementById('app');
+  root.innerHTML = '';
+
+  if (!State.user) {
+    root.appendChild(renderLogin());
+  } else {
+    root.appendChild(renderShell());
   }
-};
 
-// Estado global (objeto reactivo plano; cambios disparan render() manualmente)
-export const State = {
-  config: Storage.get('config') || { url: '', anonKey: '' },
-  user: Storage.get('user') || null,
-  view: 'scan',
-  modal: null,
-  cache: {
-    boxes: [],
-    movements: [],
-    users: [],
-    articulos: [],
-    posiciones: [],
-    showConsumed: false,
-    currentBox: null,
-    currentArticleId: null,
-    newBox: null,
-    printCode: null
-  },
-  loading: false,
-  scannerActive: false,
-  searchQuery: ''
-};
+  if (State.modal) {
+    const map = {
+      box:           renderBoxModal,
+      config:        renderConfigModal,
+      reduce:        renderReduceModal,
+      increase:      renderIncreaseModal,
+      move:          renderMoveModal,
+      history:       renderHistoryModal,
+      create:        renderCreateBoxModal,
+      scanProduct:   renderScanProductModal,
+      print:         renderPrintQRModal,
+      createUser:    renderCreateUserModal,
+      editUser:      renderEditUserModal,
+      scanForSearch: renderScanForSearchModal
+    };
+    const renderer = map[State.modal];
+    if (renderer) root.appendChild(renderer());
+  }
 
-// Helper: ¿estamos en modo demo (sin Supabase)?
-export const isDemoMode = () => !State.config.url || !State.config.anonKey;
+  if (isDemoMode()) {
+    root.appendChild($(`<div class="demo-badge">Modo demo</div>`));
+  }
+}
+
+// =====================================================================
+// BOOT
+// =====================================================================
+async function boot() {
+  // Inicializar contraseñas demo (hash) si estamos en modo demo
+  await initMockPasswords();
+
+  // Conectar a Supabase si hay configuración
+  initSupabase();
+
+  // Render inicial
+  render();
+
+  // Eventos globales
+  window.addEventListener('online',  () => import('./utils.js').then(m => m.toast('Conectado a internet', 'success')));
+  window.addEventListener('offline', () => import('./utils.js').then(m => m.toast('Sin conexión', 'error')));
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopScanner();
+  });
+}
+
+boot().catch(e => {
+  console.error('Error al arrancar:', e);
+  document.getElementById('app').innerHTML = `
+    <div style="padding:40px 20px; text-align:center; color:#888;">
+      <h2 style="color:#f5b800; margin-bottom:8px;">Error al iniciar</h2>
+      <p style="font-family:monospace; font-size:13px;">${e.message}</p>
+    </div>
+  `;
+});

@@ -1,45 +1,33 @@
-// =====================================================================
-// scanner.js — envoltura mínima sobre html5-qrcode
-// =====================================================================
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#0a0a0a" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Inventario El Rey" />
+<title>Inventario · El Rey</title>
 
-import { toast } from './utils.js';
+<link rel="manifest" href="data:application/manifest+json;charset=utf-8,%7B%22name%22%3A%22Inventario%20El%20Rey%22%2C%22short_name%22%3A%22Inventario%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230a0a0a%22%2C%22theme_color%22%3A%22%230a0a0a%22%2C%22icons%22%3A%5B%5D%7D" />
 
-let _scanner = null;
-let _onScanCb = null;
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 
-export function isActive() { return !!_scanner; }
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
 
-export function startScanner(elementId, onScan, options = {}) {
-  if (_scanner) return; // ya hay uno activo
-  if (!window.Html5Qrcode) { toast('Cámara no disponible aquí', 'error'); return; }
+<div id="app"></div>
+<div id="toast-container"></div>
 
-  _onScanCb = onScan;
-  _scanner = new window.Html5Qrcode(elementId, { verbose: false });
-  _scanner.start(
-    { facingMode: 'environment' },
-    {
-      fps: options.fps || 10,
-      qrbox: options.qrbox || { width: 240, height: 240 },
-      aspectRatio: options.aspectRatio || 1.0
-    },
-    (decoded) => {
-      if (navigator.vibrate) navigator.vibrate(60);
-      const cb = _onScanCb;
-      stopScanner();
-      if (cb) cb(decoded);
-    },
-    () => {} // ignorar "no QR encontrado"
-  ).catch(e => {
-    _scanner = null;
-    toast('No se pudo iniciar la cámara: ' + e, 'error');
-  });
-}
+<!-- Librerías externas (CDN) -->
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 
-export function stopScanner() {
-  if (!_scanner) return;
-  try {
-    _scanner.stop().then(() => _scanner.clear()).catch(()=>{});
-  } catch(e) {}
-  _scanner = null;
-  _onScanCb = null;
-}
+<!-- Aplicación (módulos ES) -->
+<script type="module" src="./main.js"></script>
+</body>
+</html>

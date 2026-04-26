@@ -1,89 +1,54 @@
 // =====================================================================
-// main.js — punto de entrada de la aplicación
+// auth.js — login, logout y helpers de roles
 // =====================================================================
 
-import { State, isDemoMode } from './state.js';
-import { initSupabase } from './api.js';
-import { initMockPasswords } from './mock.js';
-import { stopScanner } from './scanner.js';
-import { $ } from './utils.js';
-import {
-  renderLogin, renderShell
-} from './views.js';
-import {
-  renderBoxModal, renderConfigModal,
-  renderReduceModal, renderIncreaseModal,
-  renderMoveModal, renderHistoryModal,
-  renderCreateBoxModal, renderScanProductModal,
-  renderPrintQRModal,
-  renderCreateUserModal, renderEditUserModal,
-  renderScanForSearchModal
-} from './modals.js';
+import { State, Storage } from './state.js';
+import { API } from './api.js';
+import { hashPassword } from './utils.js';
 
-// =====================================================================
-// RENDER (función central)
-// =====================================================================
-export function render() {
-  const root = document.getElementById('app');
-  root.innerHTML = '';
-
-  if (!State.user) {
-    root.appendChild(renderLogin());
-  } else {
-    root.appendChild(renderShell());
+// Intenta autenticar al usuario contra el password_hash almacenado
+export async function login(username, password) {
+  const cleanU = (username || '').trim().toUpperCase();
+  if (!cleanU || !password) {
+    throw new Error('Ingresá usuario y contraseña');
   }
-
-  if (State.modal) {
-    const map = {
-      box:           renderBoxModal,
-      config:        renderConfigModal,
-      reduce:        renderReduceModal,
-      increase:      renderIncreaseModal,
-      move:          renderMoveModal,
-      history:       renderHistoryModal,
-      create:        renderCreateBoxModal,
-      scanProduct:   renderScanProductModal,
-      print:         renderPrintQRModal,
-      createUser:    renderCreateUserModal,
-      editUser:      renderEditUserModal,
-      scanForSearch: renderScanForSearchModal
-    };
-    const renderer = map[State.modal];
-    if (renderer) root.appendChild(renderer());
+  const user = await API.findUserByUsername(cleanU);
+  if (!user) throw new Error('Usuario o contraseña incorrectos');
+  if (!user.activo) throw new Error('Este usuario está desactivado');
+  if (!user.password_hash) {
+    throw new Error('Este usuario no tiene contraseña asignada. Pedile al admin que te configure una.');
   }
-
-  if (isDemoMode()) {
-    root.appendChild($(`<div class="demo-badge">Modo demo</div>`));
+  const inputHash = await hashPassword(password);
+  if (inputHash !== user.password_hash) {
+    throw new Error('Usuario o contraseña incorrectos');
   }
+  // Actualizar último login (best-effort)
+  try {
+    await API.updateUser(user.id, { ultimo_login: new Date().toISOString() });
+  } catch (e) { /* no bloqueante */ }
+  // Guardar sesión
+  State.user = user;
+  Storage.set('user', user);
+  return user;
 }
 
-// =====================================================================
-// BOOT
-// =====================================================================
-async function boot() {
-  // Inicializar contraseñas demo (hash) si estamos en modo demo
-  await initMockPasswords();
-
-  // Conectar a Supabase si hay configuración
-  initSupabase();
-
-  // Render inicial
-  render();
-
-  // Eventos globales
-  window.addEventListener('online',  () => import('./utils.js').then(m => m.toast('Conectado a internet', 'success')));
-  window.addEventListener('offline', () => import('./utils.js').then(m => m.toast('Sin conexión', 'error')));
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) stopScanner();
-  });
+export function logout() {
+  State.user = null;
+  Storage.remove('user');
 }
 
-boot().catch(e => {
-  console.error('Error al arrancar:', e);
-  document.getElementById('app').innerHTML = `
-    <div style="padding:40px 20px; text-align:center; color:#888;">
-      <h2 style="color:#f5b800; margin-bottom:8px;">Error al iniciar</h2>
-      <p style="font-family:monospace; font-size:13px;">${e.message}</p>
-    </div>
-  `;
-});
+// Helpers de rol
+export function isAdmin()       { return State.user?.rol === 'admin'; }
+export function isSupervisor()  { return ['admin', 'supervisor'].includes(State.user?.rol); }
+export function isContador()    { return ['admin', 'supervisor', 'contador'].includes(State.user?.rol); }
+export function isAuditor()     { return ['admin', 'auditor'].includes(State.user?.rol); }
+
+// Validación de username (alfanumérico, sin espacios)
+export function isValidUsername(u) {
+  return /^[A-Z][A-Z0-9_]{2,29}$/.test((u || '').toUpperCase());
+}
+
+// Validación de contraseña (mínimo 6 chars)
+export function isValidPassword(p) {
+  return typeof p === 'string' && p.length >= 6;
+}
