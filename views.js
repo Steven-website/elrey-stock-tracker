@@ -2259,6 +2259,38 @@ function renderConteoView() {
   }
 }
 
+function _ctShowZoom(art, color) {
+  document.getElementById('ct-zoom-overlay')?.remove();
+  const overlay = $(`
+    <div id="ct-zoom-overlay" class="ct-zoom-overlay">
+      <div class="ct-zoom-bg"></div>
+      <div class="ct-zoom-content">
+        ${art.imagen_url
+          ? `<img src="${escapeHtml(art.imagen_url)}" alt="${escapeHtml(art.descripcion)}" class="ct-zoom-img" />`
+          : `<div class="ct-zoom-avatar" style="background:${color}; color:#fff;">${escapeHtml(_ctInitial(art))}</div>`
+        }
+        <div class="ct-zoom-desc">${escapeHtml(art.descripcion)}</div>
+        <div class="ct-zoom-sku mono">${escapeHtml(art.sku)}</div>
+        <div style="font-size:11px; color:rgba(255,255,255,0.5); margin-top:4px;">Toca para cerrar</div>
+      </div>
+    </div>
+  `);
+  overlay.onclick = () => overlay.remove();
+  document.body.appendChild(overlay);
+}
+
+function _ctArtImg(art, color, size = 'sm') {
+  const sz = size === 'lg' ? 'ct-hero-img-wrap' : 'ct-art-img-wrap';
+  return `
+    <div class="${sz}" data-art-zoom="${art.id}">
+      ${art.imagen_url
+        ? `<img class="${size === 'lg' ? 'ct-hero-img' : 'ct-art-img'}" src="${escapeHtml(art.imagen_url)}" alt="" loading="lazy" />`
+        : `<div class="ct-art-avatar" style="background:${color}22; color:${color}; ${size === 'lg' ? 'width:80px;height:80px;font-size:32px;border-radius:20px;' : ''}">${escapeHtml(_ctInitial(art))}</div>`
+      }
+    </div>
+  `;
+}
+
 function _ctOverview(tarea, registros) {
   const arts = tarea.articulos;
   const doneIds = new Set(registros.map(r => r.articulo_id));
@@ -2275,6 +2307,19 @@ function _ctOverview(tarea, registros) {
         <div class="ct-task-meta" style="margin-top:4px;">${doneCount} de ${arts.length} artículo${arts.length !== 1 ? 's' : ''} contado${doneCount !== 1 ? 's' : ''}</div>
       </div>
     </div>
+
+    <div class="section" style="padding-top:0; padding-bottom:8px;">
+      <div style="display:flex; gap:8px; align-items:center;">
+        <div style="position:relative; flex:1;">
+          <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--muted); pointer-events:none;">${ICON.search}</span>
+          <input class="input mono" id="ct-ov-input" placeholder="Código de barras o SKU…" style="padding-left:40px;" autocomplete="off" />
+        </div>
+        <button class="btn" id="ct-ov-scan" title="Escanear">${ICON.barcode}</button>
+      </div>
+      <div id="ct-ov-scanner" style="display:none; border-radius:var(--radius); overflow:hidden; margin-top:8px; min-height:120px;"></div>
+      <div id="ct-ov-msg"></div>
+    </div>
+
     <div class="section" style="padding-top:0;">
       <div class="section-title" style="margin-bottom:12px;">Artículos a contar</div>
       <div id="ct-arts-list"></div>
@@ -2282,12 +2327,15 @@ function _ctOverview(tarea, registros) {
   `;
 
   const listEl = wrap.querySelector('#ct-arts-list');
+  const msgEl  = wrap.querySelector('#ct-ov-msg');
+  const cardMap = {};
+
   arts.forEach((art, idx) => {
     const done = doneIds.has(art.id);
     const color = _ctColor(art.familia);
     const card = $(`
-      <div class="ct-art-card ${done ? 'ct-art-done' : ''}">
-        <div class="ct-art-avatar" style="background:${color}22; color:${color};">${escapeHtml(_ctInitial(art))}</div>
+      <div class="ct-art-card ${done ? 'ct-art-done' : ''}" id="ct-art-card-${art.id}">
+        ${_ctArtImg(art, color, 'sm')}
         <div class="ct-art-info">
           <div class="ct-art-desc">${escapeHtml(art.descripcion)}</div>
           <div class="ct-art-meta">
@@ -2305,8 +2353,77 @@ function _ctOverview(tarea, registros) {
       State.cache.conteoFlow = { ...State.cache.conteoFlow, artIdx: idx, step: 'info' };
       render();
     });
+    card.querySelector('[data-art-zoom]')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      _ctShowZoom(art, color);
+    });
+    cardMap[art.id] = { card, idx };
     listEl.appendChild(card);
   });
+
+  // Scan / search logic
+  const handleCode = async (raw) => {
+    const code = raw.trim();
+    if (!code) return;
+    msgEl.innerHTML = `<div style="font-size:12px; color:var(--muted); padding:6px 0;">Buscando…</div>`;
+    const found = await API.findArticuloByCode(code).catch(() => null);
+    if (!found) {
+      msgEl.innerHTML = `<div class="ct-scan-msg ct-scan-warn">${ICON.warn} Artículo no encontrado: <span class="mono">${escapeHtml(code)}</span></div>`;
+      return;
+    }
+    const entry = cardMap[found.id];
+    if (entry) {
+      listEl.querySelectorAll('.ct-art-highlighted').forEach(el => el.classList.remove('ct-art-highlighted'));
+      entry.card.classList.add('ct-art-highlighted');
+      entry.card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const done = doneIds.has(found.id);
+      const color = _ctColor(found.familia);
+      const msgNode = $(`
+        <div class="ct-scan-msg ct-scan-ok">
+          ${art_img_mini(found, color)}
+          <div style="flex:1; min-width:0;">
+            <div style="font-weight:600; font-size:13px;">${escapeHtml(found.descripcion)}</div>
+            <div style="font-size:11px; color:${done ? 'var(--success)' : 'var(--muted)'};">${done ? '✓ Ya contado' : 'Pendiente de conteo'}</div>
+          </div>
+          ${!done ? `<button class="btn btn-sm btn-primary" data-go="${entry.idx}">Contar</button>` : ''}
+        </div>
+      `);
+      msgNode.querySelector('[data-go]')?.addEventListener('click', () => {
+        State.cache.conteoFlow = { ...State.cache.conteoFlow, artIdx: entry.idx, step: 'info' };
+        render();
+      });
+      msgEl.innerHTML = '';
+      msgEl.appendChild(msgNode);
+    } else {
+      msgEl.innerHTML = `<div class="ct-scan-msg ct-scan-warn">${ICON.warn} <strong>${escapeHtml(found.descripcion)}</strong> no pertenece a esta tarea</div>`;
+    }
+  };
+
+  function art_img_mini(art, color) {
+    if (art.imagen_url) return `<img src="${escapeHtml(art.imagen_url)}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0;" loading="lazy" />`;
+    return `<div style="width:36px;height:36px;border-radius:8px;background:${color}22;color:${color};display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;">${escapeHtml(_ctInitial(art))}</div>`;
+  }
+
+  const input = wrap.querySelector('#ct-ov-input');
+  const scannerDiv = wrap.querySelector('#ct-ov-scanner');
+  const scanBtn = wrap.querySelector('#ct-ov-scan');
+  let scanOpen = false;
+
+  input.onkeydown = e => {
+    if (e.key === 'Enter' && input.value.trim()) { handleCode(input.value); input.value = ''; }
+  };
+  input.oninput = () => { if (!input.value.trim()) msgEl.innerHTML = ''; };
+
+  scanBtn.onclick = () => {
+    scanOpen = !scanOpen;
+    scannerDiv.style.display = scanOpen ? 'block' : 'none';
+    scanBtn.style.color = scanOpen ? 'var(--accent)' : '';
+    if (scanOpen) {
+      startScanner('ct-ov-scanner', code => { handleCode(code); feedback(); });
+    } else {
+      stopScanner();
+    }
+  };
 
   if (doneCount === arts.length && arts.length > 0) {
     const btnWrap = $(`
@@ -2335,13 +2452,19 @@ function _ctOverview(tarea, registros) {
 function _ctStepInfo(tarea, art, artIdx, color) {
   const wrap = $(`<div></div>`);
   wrap.appendChild(_ctTopbar('Detalle del artículo', color, () => {
+    stopScanner();
     State.cache.conteoFlow = { ...State.cache.conteoFlow, step: null, artIdx: null };
     render();
   }));
   const body = $(`
     <div>
       <div class="ct-art-hero" style="background:${color}12; border-bottom:3px solid ${color};">
-        <div class="ct-hero-avatar" style="background:${color}; color:#fff;">${escapeHtml(_ctInitial(art))}</div>
+        <div class="ct-hero-img-wrap" id="ct-info-zoom" style="cursor:pointer;" title="Toca para ampliar">
+          ${art.imagen_url
+            ? `<img class="ct-hero-img" src="${escapeHtml(art.imagen_url)}" alt="${escapeHtml(art.descripcion)}" loading="lazy" />`
+            : `<div class="ct-hero-avatar" style="background:${color}; color:#fff;">${escapeHtml(_ctInitial(art))}</div>`
+          }
+        </div>
         <div class="ct-hero-name">${escapeHtml(art.descripcion)}</div>
         ${art.familia ? `<div class="ct-hero-fam" style="color:${color};">${escapeHtml(art.familia)}</div>` : ''}
       </div>
@@ -2360,16 +2483,82 @@ function _ctStepInfo(tarea, art, artIdx, color) {
             <div class="ct-detail-val">${escapeHtml(art.familia || '—')}</div>
           </div>
         </div>
-        <button class="btn btn-primary btn-block" style="margin-top:20px;" id="ct-iniciar">
+
+        <div class="ct-confirm-block">
+          <div class="ct-confirm-title">Confirmá escaneando el código de barras</div>
+          <div class="ct-scan-row">
+            <input class="input ct-confirm-input" id="ct-info-code" type="text"
+              inputmode="numeric" placeholder="Escanear o ingresar código…" autocomplete="off" />
+            <button class="btn ct-scan-cam-btn" id="ct-info-cam" title="Activar cámara">
+              ${ICON.scan}
+            </button>
+          </div>
+          <div id="ct-info-scanner" style="display:none; margin-top:8px;"></div>
+          <div id="ct-info-msg" class="ct-scan-msg" style="display:none;"></div>
+        </div>
+
+        <button class="btn btn-primary btn-block" style="margin-top:20px; display:none;" id="ct-iniciar">
           Iniciar conteo de este artículo
         </button>
       </div>
     </div>
   `);
-  body.querySelector('#ct-iniciar').onclick = () => {
+
+  const input   = body.querySelector('#ct-info-code');
+  const camBtn  = body.querySelector('#ct-info-cam');
+  const scanDiv = body.querySelector('#ct-info-scanner');
+  const msgDiv  = body.querySelector('#ct-info-msg');
+  const startBtn = body.querySelector('#ct-iniciar');
+  let camActive = false;
+
+  function confirmCode(raw) {
+    const code = (raw || '').trim();
+    if (!code) return;
+    input.value = code;
+    stopScanner();
+    camActive = false;
+    scanDiv.style.display = 'none';
+    camBtn.classList.remove('active');
+
+    const expected = (art.codigo_barras || '').trim();
+    if (code === expected || code === (art.sku || '').trim()) {
+      msgDiv.className = 'ct-scan-msg ct-scan-ok';
+      msgDiv.textContent = '✓ Código correcto — podés iniciar el conteo';
+      msgDiv.style.display = 'block';
+      startBtn.style.display = 'block';
+      startBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } else {
+      msgDiv.className = 'ct-scan-msg ct-scan-warn';
+      msgDiv.textContent = `✗ Código no coincide (escaneado: ${code})`;
+      msgDiv.style.display = 'block';
+      startBtn.style.display = 'none';
+      input.value = '';
+      input.focus();
+    }
+  }
+
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') confirmCode(input.value); });
+
+  camBtn.onclick = () => {
+    if (camActive) {
+      stopScanner(); camActive = false;
+      scanDiv.style.display = 'none';
+      camBtn.classList.remove('active');
+    } else {
+      scanDiv.style.display = 'block';
+      camBtn.classList.add('active');
+      camActive = true;
+      startScanner('ct-info-scanner', code => confirmCode(code));
+    }
+  };
+
+  startBtn.onclick = () => {
+    stopScanner();
     State.cache.conteoFlow = { ...State.cache.conteoFlow, step: 'exhibicion', exhQty: 0, exhLoc: '' };
     render();
   };
+
+  body.querySelector('#ct-info-zoom')?.addEventListener('click', () => _ctShowZoom(art, color));
   wrap.appendChild(body);
   return wrap;
 }

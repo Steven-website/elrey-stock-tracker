@@ -2394,3 +2394,143 @@ main {
   border: 1px solid var(--border);
 }
 .ct-caja-summary-row svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+/* ---- Imágenes en tarjetas de artículo --------------------------------- */
+.ct-art-img-wrap {
+  width: 48px; height: 48px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+  cursor: pointer;
+  position: relative;
+}
+.ct-art-img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.ct-art-img-wrap:active { opacity: 0.8; }
+
+.ct-art-highlighted {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px rgba(245,158,11,0.35);
+}
+
+/* ---- Hero imagen en detalle ------------------------------------------ */
+.ct-hero-img-wrap {
+  display: inline-block;
+  margin-bottom: 12px;
+}
+.ct-hero-img {
+  width: 96px; height: 96px;
+  border-radius: 20px;
+  object-fit: cover;
+  display: block;
+  box-shadow: var(--shadow-md);
+}
+
+/* ---- Mensaje de resultado de escaneo ---------------------------------- */
+.ct-scan-msg {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.ct-scan-msg svg { width: 16px; height: 16px; flex-shrink: 0; }
+.ct-scan-ok   { background: #16a34a14; border: 1px solid #16a34a44; color: #16a34a; }
+.ct-scan-warn { background: #d9770614; border: 1px solid #d9770644; color: var(--warn); }
+
+/* ---- Confirmación de código en step info ------------------------------ */
+.ct-confirm-block {
+  margin-top: 20px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.ct-confirm-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: 10px;
+}
+.ct-scan-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ct-confirm-input { flex: 1; }
+.ct-scan-cam-btn {
+  width: 44px; height: 44px;
+  padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  flex-shrink: 0;
+}
+.ct-scan-cam-btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+.ct-scan-cam-btn svg { width: 20px; height: 20px; }
+
+/* ---- Zoom fullscreen -------------------------------------------------- */
+.ct-zoom-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.ct-zoom-bg {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.88);
+}
+.ct-zoom-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 32px 24px;
+  max-width: 90vw;
+}
+.ct-zoom-img {
+  max-width: min(340px, 85vw);
+  max-height: 55vh;
+  object-fit: contain;
+  border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+}
+.ct-zoom-avatar {
+  width: 200px; height: 200px;
+  border-radius: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 80px;
+  font-weight: 700;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+}
+.ct-zoom-desc {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  text-align: center;
+  max-width: 280px;
+}
+.ct-zoom-sku {
+  color: rgba(255,255,255,0.55);
+  font-size: 12px;
+}

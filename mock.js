@@ -76,19 +76,19 @@ export const MOCK = {
 
   articulos: [
     // Iluminación (4)
-    { id: 1,  sku: 'CAN-001', codigo_barras: '7501234500011', descripcion: 'Candil LED 60W blanco',           familia: 'Iluminación', unidades_por_caja: 20,   activo: true },
-    { id: 2,  sku: 'CAN-002', codigo_barras: '7501234500028', descripcion: 'Candil LED 40W cálido',           familia: 'Iluminación', unidades_por_caja: 24,   activo: true },
-    { id: 3,  sku: 'CAN-003', codigo_barras: '7501234500035', descripcion: 'Candil LED solar exterior',       familia: 'Iluminación', unidades_por_caja: 12,   activo: true },
-    { id: 4,  sku: 'BOM-001', codigo_barras: '7501234500042', descripcion: 'Bombillo halógeno 100W',          familia: 'Iluminación', unidades_por_caja: 50,   activo: true },
+    { id: 1,  sku: 'CAN-001', codigo_barras: '7501234500011', descripcion: 'Candil LED 60W blanco',           familia: 'Iluminación', unidades_por_caja: 20,   activo: true, imagen_url: 'https://picsum.photos/seed/elrey-can001/400/400' },
+    { id: 2,  sku: 'CAN-002', codigo_barras: '7501234500028', descripcion: 'Candil LED 40W cálido',           familia: 'Iluminación', unidades_por_caja: 24,   activo: true, imagen_url: 'https://picsum.photos/seed/elrey-can002/400/400' },
+    { id: 3,  sku: 'CAN-003', codigo_barras: '7501234500035', descripcion: 'Candil LED solar exterior',       familia: 'Iluminación', unidades_por_caja: 12,   activo: true, imagen_url: 'https://picsum.photos/seed/elrey-can003/400/400' },
+    { id: 4,  sku: 'BOM-001', codigo_barras: '7501234500042', descripcion: 'Bombillo halógeno 100W',          familia: 'Iluminación', unidades_por_caja: 50,   activo: true, imagen_url: 'https://picsum.photos/seed/elrey-bom001/400/400' },
     // Eléctrico (3)
-    { id: 5,  sku: 'EXT-001', codigo_barras: '7501234500059', descripcion: 'Extensión eléctrica 3 m',         familia: 'Eléctrico',   unidades_por_caja: null, activo: true },
-    { id: 6,  sku: 'TOM-001', codigo_barras: '7501234500066', descripcion: 'Tomacorriente doble polarizado',  familia: 'Eléctrico',   unidades_por_caja: 10,   activo: true },
-    { id: 7,  sku: 'INT-001', codigo_barras: '7501234500073', descripcion: 'Interruptor sencillo',            familia: 'Eléctrico',   unidades_por_caja: 24,   activo: true },
+    { id: 5,  sku: 'EXT-001', codigo_barras: '7501234500059', descripcion: 'Extensión eléctrica 3 m',         familia: 'Eléctrico',   unidades_por_caja: null, activo: true, imagen_url: 'https://picsum.photos/seed/elrey-ext001/400/400' },
+    { id: 6,  sku: 'TOM-001', codigo_barras: '7501234500066', descripcion: 'Tomacorriente doble polarizado',  familia: 'Eléctrico',   unidades_por_caja: 10,   activo: true, imagen_url: 'https://picsum.photos/seed/elrey-tom001/400/400' },
+    { id: 7,  sku: 'INT-001', codigo_barras: '7501234500073', descripcion: 'Interruptor sencillo',            familia: 'Eléctrico',   unidades_por_caja: 24,   activo: true, imagen_url: 'https://picsum.photos/seed/elrey-int001/400/400' },
     // Plomería (2)
-    { id: 8,  sku: 'PEG-001', codigo_barras: '7501234500080', descripcion: 'Pegamento PVC 250 ml',            familia: 'Plomería',    unidades_por_caja: 12,   activo: true },
-    { id: 9,  sku: 'TUB-001', codigo_barras: '7501234500097', descripcion: 'Tubo PVC 1/2" × 3 m',            familia: 'Plomería',    unidades_por_caja: 10,   activo: true },
+    { id: 8,  sku: 'PEG-001', codigo_barras: '7501234500080', descripcion: 'Pegamento PVC 250 ml',            familia: 'Plomería',    unidades_por_caja: 12,   activo: true, imagen_url: 'https://picsum.photos/seed/elrey-peg001/400/400' },
+    { id: 9,  sku: 'TUB-001', codigo_barras: '7501234500097', descripcion: 'Tubo PVC 1/2" × 3 m',            familia: 'Plomería',    unidades_por_caja: 10,   activo: true, imagen_url: 'https://picsum.photos/seed/elrey-tub001/400/400' },
     // Ferretería (1)
-    { id: 10, sku: 'LIJ-001', codigo_barras: '7501234500104', descripcion: 'Lija de agua grano 120',          familia: 'Ferretería',  unidades_por_caja: 50,   activo: true }
+    { id: 10, sku: 'LIJ-001', codigo_barras: '7501234500104', descripcion: 'Lija de agua grano 120',          familia: 'Ferretería',  unidades_por_caja: 50,   activo: true, imagen_url: 'https://picsum.photos/seed/elrey-lij001/400/400' }
   ],
 
   cajas: [
