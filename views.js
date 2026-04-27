@@ -145,24 +145,37 @@ export function renderShell() {
   };
 
   // Admin Master solo ve vistas administrativas
-  const adminOnly = isAdmin();
+  const adminOnly    = isAdmin();
+  const isContador   = State.user?.rol === 'contador';
+  const contadorOnly = isContador;
+
   if (adminOnly && State.view !== 'mov' && State.view !== 'mas') {
     State.view = 'mas';
   }
+  if (contadorOnly && !['conteo', 'perfil'].includes(State.view)) {
+    State.view = 'conteo';
+  }
 
-  const canPrint   = ['operario', 'contador'].includes(State.user?.rol);
-  const isContador = State.user?.rol === 'contador';
+  const canPrint = State.user?.rol === 'operario';
 
   const main = $(`<main></main>`);
-  if (!adminOnly && State.view === 'scan')                           main.appendChild(renderScanView());
-  else if (!adminOnly && State.view === 'mover-lote')               main.appendChild(renderMoverLoteView());
-  else if (!adminOnly && State.view === 'buscar')                   main.appendChild(renderBuscarView());
-  else if (!adminOnly && State.view === 'cajas')                    main.appendChild(renderCajasView());
-  else if (!adminOnly && State.view === 'perfil')                   main.appendChild(renderPerfilView());
-  else if (!adminOnly && State.view === 'imprimir' && canPrint)     main.appendChild(renderImprimirView());
-  else if (!adminOnly && State.view === 'conteo'   && isContador)   main.appendChild(renderConteoView());
-  else if (State.view === 'mov')                                     main.appendChild(renderMovView());
-  else if (State.view === 'mas')                                     main.appendChild(renderMasView());
+  if (contadorOnly) {
+    if (State.view === 'perfil') main.appendChild(renderPerfilView());
+    else                          main.appendChild(renderConteoView());
+  } else if (!adminOnly) {
+    if      (State.view === 'scan')                    main.appendChild(renderScanView());
+    else if (State.view === 'mover-lote')              main.appendChild(renderMoverLoteView());
+    else if (State.view === 'buscar')                  main.appendChild(renderBuscarView());
+    else if (State.view === 'cajas')                   main.appendChild(renderCajasView());
+    else if (State.view === 'perfil')                  main.appendChild(renderPerfilView());
+    else if (State.view === 'imprimir' && canPrint)    main.appendChild(renderImprimirView());
+    else if (State.view === 'mov')                     main.appendChild(renderMovView());
+    else if (State.view === 'mas')                     main.appendChild(renderMasView());
+    else                                               main.appendChild(renderScanView());
+  } else {
+    if (State.view === 'mov') main.appendChild(renderMovView());
+    else                      main.appendChild(renderMasView());
+  }
   wrap.appendChild(main);
 
   const pending = getPendingCount();
@@ -174,13 +187,20 @@ export function renderShell() {
         <button class="nav-logout" id="nav-logout-btn">${ICON.logout}<span>Cerrar sesión</span></button>
       </nav>
     `)
+    : contadorOnly
+    ? $(`
+      <nav class="tabs">
+        <button data-v="conteo" class="${State.view==='conteo'?'active':''}">${ICON.clipboard}<span>Conteo</span></button>
+        <button data-v="perfil" class="${State.view==='perfil'?'active':''}">${ICON.user}<span>Perfil</span></button>
+        <button class="nav-logout" id="nav-logout-btn">${ICON.logout}<span>Cerrar sesión</span></button>
+      </nav>
+    `)
     : $(`
       <nav class="tabs">
         <button data-v="scan"   class="${State.view==='scan'     ?'active':''}">${ICON.scan}<span>Escanear</span></button>
         <button data-v="buscar" class="${State.view==='buscar'   ?'active':''}">${ICON.search}<span>Buscar</span></button>
         <button data-v="cajas"  class="${State.view==='cajas'    ?'active':''}">${ICON.box}<span>Cajas</span></button>
         <button data-v="mov"    class="${State.view==='mov'      ?'active':''}">${ICON.list}<span>Mov.</span>${pending > 0 ? `<span class="nav-badge">${pending}</span>` : ''}</button>
-        ${isContador ? `<button data-v="conteo" class="${State.view==='conteo'?'active':''}">${ICON.clipboard}<span>Conteo</span></button>` : ''}
         ${canPrint ? `<button data-v="imprimir" class="${State.view==='imprimir'?'active':''}">${ICON.qr}<span>Imprimir</span></button>` : ''}
         <button data-v="perfil" class="${State.view==='perfil'   ?'active':''}">${ICON.user}<span>Perfil</span></button>
         <button class="nav-logout" id="nav-logout-btn">${ICON.logout}<span>Cerrar sesión</span></button>
@@ -2335,13 +2355,9 @@ function _ctStepInfo(tarea, art, artIdx, color) {
             <div class="ct-detail-label">Código de barras</div>
             <div class="ct-detail-val mono">${escapeHtml(art.codigo_barras || '—')}</div>
           </div>
-          <div class="ct-detail-item">
+          <div class="ct-detail-item" style="grid-column:1/-1;">
             <div class="ct-detail-label">Familia</div>
             <div class="ct-detail-val">${escapeHtml(art.familia || '—')}</div>
-          </div>
-          <div class="ct-detail-item">
-            <div class="ct-detail-label">Uds. por caja</div>
-            <div class="ct-detail-val">${art.unidades_por_caja != null ? art.unidades_por_caja : '—'}</div>
           </div>
         </div>
         <button class="btn btn-primary btn-block" style="margin-top:20px;" id="ct-iniciar">
@@ -2375,7 +2391,9 @@ function _ctStepExhibicion(tarea, art, artIdx, color) {
         <button class="btn ct-qty-btn" id="ct-p">+</button>
       </div>
       <label class="label" style="display:block; margin-bottom:6px;">Pasillo / ubicación <span style="color:var(--muted);">(opcional)</span></label>
-      <input class="input" id="ct-exh-loc" placeholder="Ej: Pasillo 3, estante B" value="${escapeHtml(cf.exhLoc || '')}" autocomplete="off" />
+      <select class="input" id="ct-exh-loc">
+        <option value="">— Seleccionar —</option>
+      </select>
       <button class="btn btn-primary btn-block" style="margin-top:20px;" id="ct-exh-ok">Continuar</button>
     </div>
   `);
@@ -2386,10 +2404,23 @@ function _ctStepExhibicion(tarea, art, artIdx, color) {
     State.cache.conteoFlow = {
       ...cf, step: 'cajas',
       exhQty: Math.max(0, parseInt(qi.value) || 0),
-      exhLoc: body.querySelector('#ct-exh-loc').value.trim()
+      exhLoc: body.querySelector('#ct-exh-loc').value
     };
     render();
   };
+  // Cargar posiciones tipo exhibición
+  API.listPosiciones().then(posiciones => {
+    const sel = body.querySelector('#ct-exh-loc');
+    const exhPosiciones = posiciones.filter(p => p.tipo === 'exhibicion' || p.tipo === 'corona');
+    const allOthers = posiciones.filter(p => p.tipo !== 'exhibicion' && p.tipo !== 'corona');
+    [...exhPosiciones, ...allOthers].forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = `${p.ubicacion} — ${p.descripcion}`;
+      opt.textContent = `${p.ubicacion} — ${p.descripcion}`;
+      if (cf.exhLoc === opt.value) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }).catch(() => {});
   wrap.appendChild(body);
   return wrap;
 }
@@ -2450,7 +2481,9 @@ function _ctStepCrearCaja(tarea, art, artIdx, color) {
         <p class="ct-qr-hint">Pegá la etiqueta en la caja antes de continuar.</p>
       </div>
       <label class="label" style="display:block; margin:16px 0 6px;">Ubicación / bodega <span style="color:var(--muted);">(opcional)</span></label>
-      <input class="input" id="ct-caja-loc" placeholder="Ej: Bodega 2, fila C" autocomplete="off" />
+      <select class="input" id="ct-caja-loc">
+        <option value="">— Seleccionar —</option>
+      </select>
       <button class="btn btn-primary btn-block" style="margin-top:16px;" id="ct-ir-scan">
         ${ICON.barcode} Etiqueta pegada — escanear caja
       </button>
@@ -2458,10 +2491,22 @@ function _ctStepCrearCaja(tarea, art, artIdx, color) {
   `);
   body.querySelector('#ct-print').onclick = () => { window.open(qrUrl, '_blank'); };
   body.querySelector('#ct-ir-scan').onclick = () => {
-    const loc = body.querySelector('#ct-caja-loc').value.trim();
+    const loc = body.querySelector('#ct-caja-loc').value;
     State.cache.conteoFlow = { ...cf, step: 'scan-caja', pendingBox: { code: newCode, loc } };
     render();
   };
+  // Cargar posiciones tipo bodega/corona
+  API.listPosiciones().then(posiciones => {
+    const sel = body.querySelector('#ct-caja-loc');
+    const bodega = posiciones.filter(p => p.tipo === 'bodega' || p.tipo === 'corona');
+    const resto  = posiciones.filter(p => p.tipo !== 'bodega' && p.tipo !== 'corona');
+    [...bodega, ...resto].forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = `${p.ubicacion} — ${p.descripcion}`;
+      opt.textContent = `${p.ubicacion} — ${p.descripcion}`;
+      sel.appendChild(opt);
+    });
+  }).catch(() => {});
   wrap.appendChild(body);
   return wrap;
 }
