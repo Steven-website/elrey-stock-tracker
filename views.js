@@ -1548,11 +1548,10 @@ function _apDemo(el) {
           <div class="dash-card" style="margin-bottom:12px;">
             <div class="dash-card-header">
               <div class="dash-card-title">${ICON.qr} Demo · datos de simulación</div>
-              <button class="btn btn-sm btn-primary" id="demo-download">${ICON.download || '⬇'} Descargar</button>
+              <button class="btn btn-sm btn-primary" id="demo-download">${ICON.download || '⬇'} Descargar Word</button>
             </div>
             <div style="padding:10px 14px 14px;font-size:12px;color:var(--muted);">
-              5 cajas con 2 productos cada una y los 9 usuarios demo.
-              Usá "Descargar" para generar un documento Word con los QR de cada caja y los códigos de barras de cada producto, listos para imprimir.
+              Hoja imprimible con sólo lo necesario: QR + código por caja, y código de barras EAN-13 + SKU por producto. Sin descripciones ni cantidades.
             </div>
           </div>
 
@@ -1576,84 +1575,38 @@ function _apDemo(el) {
 
       el.querySelector('#demo-download').onclick = () => {
         const qrUrl = code => `https://api.qrserver.com/v1/create-qr-code/?size=220x220&ecc=M&data=${encodeURIComponent(code)}`;
-        const bcUrl = code => `https://bwipjs-api.metafloor.com/?bcid=ean13&text=${encodeURIComponent(code)}&scale=2&height=14&includetext&textxalign=center`;
+        const bcUrl = code => `https://bwipjs-api.metafloor.com/?bcid=ean13&text=${encodeURIComponent(code)}&scale=2&height=20&includetext&textxalign=center`;
 
-        const cajaSections = cajas.map(c => {
-          const tienda = tiendaMap[c.tienda_id]?.nombre || '—';
-          const pos    = c.posicion ? `${c.posicion.ubicacion} · ${c.posicion.descripcion}` : '—';
-          const prods  = (c.contenido || []).map(it => {
-            const a = artMap[it.articulo_id]; if (!a) return '';
-            return `
-              <tr>
-                <td style="padding:6px 10px;border:1px solid #ccc;text-align:center;">
-                  <img src="${bcUrl(a.codigo_barras)}" alt="${escapeHtml(a.codigo_barras)}" style="height:60px;" />
-                </td>
-                <td style="padding:6px 10px;border:1px solid #ccc;font-family:Consolas,monospace;font-size:11pt;">${escapeHtml(a.sku)}</td>
-                <td style="padding:6px 10px;border:1px solid #ccc;font-size:11pt;">${escapeHtml(a.descripcion)}</td>
-                <td style="padding:6px 10px;border:1px solid #ccc;text-align:center;font-size:11pt;">${it.cantidad_actual}</td>
-              </tr>`;
-          }).join('');
+        const cajaLabels = cajas.map(c => `
+          <div style="display:inline-block;width:46%;text-align:center;border:1px dashed #999;padding:10px;margin:0 1% 10px;vertical-align:top;page-break-inside:avoid;">
+            <img src="${qrUrl(c.codigo_caja)}" alt="${escapeHtml(c.codigo_caja)}" style="width:160px;height:160px;" /><br/>
+            <span style="font-family:Consolas,monospace;font-size:11pt;font-weight:bold;">${escapeHtml(c.codigo_caja)}</span>
+          </div>`).join('');
 
-          return `
-            <div style="page-break-inside:avoid;margin-bottom:24px;border:1px solid #888;padding:14px;">
-              <h2 style="font-family:Arial;font-size:14pt;margin:0 0 4px;">${escapeHtml(c.codigo_caja)}</h2>
-              <p style="font-family:Arial;font-size:10pt;color:#555;margin:0 0 10px;">${escapeHtml(tienda)} · ${escapeHtml(pos)} · tipo: ${escapeHtml(c.tipo_caja)}</p>
-              <table style="border-collapse:collapse;width:100%;">
-                <tr>
-                  <td style="width:240px;border:1px solid #ccc;text-align:center;vertical-align:top;padding:8px;">
-                    <img src="${qrUrl(c.codigo_caja)}" alt="${escapeHtml(c.codigo_caja)}" style="width:200px;height:200px;" /><br/>
-                    <span style="font-family:Consolas,monospace;font-size:10pt;">${escapeHtml(c.codigo_caja)}</span>
-                  </td>
-                  <td style="vertical-align:top;padding:0 0 0 10px;">
-                    <table style="border-collapse:collapse;width:100%;">
-                      <thead>
-                        <tr style="background:#eee;">
-                          <th style="padding:6px;border:1px solid #ccc;font-size:10pt;">Código de barras</th>
-                          <th style="padding:6px;border:1px solid #ccc;font-size:10pt;">SKU</th>
-                          <th style="padding:6px;border:1px solid #ccc;font-size:10pt;">Descripción</th>
-                          <th style="padding:6px;border:1px solid #ccc;font-size:10pt;">Cant.</th>
-                        </tr>
-                      </thead>
-                      <tbody>${prods}</tbody>
-                    </table>
-                  </td>
-                </tr>
-              </table>
-            </div>`;
-        }).join('');
+        const productosUnicos = [];
+        const seen = new Set();
+        cajas.forEach(c => (c.contenido || []).forEach(it => {
+          const a = artMap[it.articulo_id];
+          if (a && !seen.has(a.id)) { seen.add(a.id); productosUnicos.push(a); }
+        }));
 
-        const usersTable = `
-          <table style="border-collapse:collapse;width:100%;margin-top:8px;">
-            <thead><tr style="background:#eee;">
-              <th style="padding:6px;border:1px solid #ccc;font-size:10pt;">Usuario</th>
-              <th style="padding:6px;border:1px solid #ccc;font-size:10pt;">Contraseña</th>
-              <th style="padding:6px;border:1px solid #ccc;font-size:10pt;">Rol</th>
-              <th style="padding:6px;border:1px solid #ccc;font-size:10pt;">Tienda</th>
-            </tr></thead>
-            <tbody>
-              ${DEMO_USERS.map(u => `
-                <tr>
-                  <td style="padding:5px 8px;border:1px solid #ccc;font-family:Consolas,monospace;font-size:10pt;">${escapeHtml(u.username)}</td>
-                  <td style="padding:5px 8px;border:1px solid #ccc;font-family:Consolas,monospace;font-size:10pt;">${escapeHtml(u.password)}</td>
-                  <td style="padding:5px 8px;border:1px solid #ccc;font-size:10pt;">${escapeHtml(u.rol)}</td>
-                  <td style="padding:5px 8px;border:1px solid #ccc;font-size:10pt;">${escapeHtml(u.tienda)}</td>
-                </tr>`).join('')}
-            </tbody>
-          </table>`;
+        const prodLabels = productosUnicos.map(a => `
+          <div style="display:inline-block;width:30%;text-align:center;border:1px dashed #999;padding:8px;margin:0 1% 8px;vertical-align:top;page-break-inside:avoid;">
+            <img src="${bcUrl(a.codigo_barras)}" alt="${escapeHtml(a.codigo_barras)}" style="height:55px;" /><br/>
+            <span style="font-family:Consolas,monospace;font-size:10pt;font-weight:bold;">${escapeHtml(a.sku)}</span>
+          </div>`).join('');
 
         const html = `<!DOCTYPE html>
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-<head><meta charset="utf-8" /><title>Demo El Rey</title>
+<head><meta charset="utf-8" /><title>Demo El Rey · Etiquetas</title>
 <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
 <style>@page { size: A4; margin: 1.5cm; } body { font-family: Arial, sans-serif; }</style>
 </head>
 <body>
-  <h1 style="font-size:18pt;margin:0 0 4px;">Demo · El Rey · Inventario</h1>
-  <p style="color:#555;font-size:10pt;margin:0 0 16px;">Generado: ${new Date().toLocaleString()}</p>
-  <h2 style="font-size:14pt;border-bottom:2px solid #333;padding-bottom:4px;">Cajas (QR)</h2>
-  ${cajaSections}
-  <h2 style="font-size:14pt;border-bottom:2px solid #333;padding-bottom:4px;page-break-before:always;">Usuarios demo</h2>
-  ${usersTable}
+  <h2 style="font-size:13pt;margin:0 0 8px;">Cajas</h2>
+  ${cajaLabels}
+  <h2 style="font-size:13pt;margin:14px 0 8px;page-break-before:always;">Productos</h2>
+  ${prodLabels}
 </body></html>`;
 
         const blob = new Blob(['﻿', html], { type: 'application/msword' });
