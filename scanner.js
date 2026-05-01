@@ -16,6 +16,7 @@ export function isActive() { return !!_scanner || !!_native; }
 // Carga (o re-intenta cargar) html5-qrcode si no está disponible.
 // iOS Safari a veces falla la carga inicial del CDN — re-intentamos al iniciar.
 const _LIB_URLS = [
+  './html5-qrcode.min.js',                    // vendorizado por GitHub Actions — mismo origen
   'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/html5-qrcode.min.js',
   'https://unpkg.com/html5-qrcode@2.3.10/html5-qrcode.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.10/html5-qrcode.min.js'
