@@ -1343,6 +1343,27 @@ function _apConfig(el, demo) {
       </div>
       <div class="dash-card">
         <div class="dash-card-header">
+          <div class="dash-card-title">${ICON.cloud || ICON.database} Backend GitHub (JSON)</div>
+        </div>
+        <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px;">
+          <div style="font-size:12px;color:var(--muted);">
+            Persistencia demo: la app baja un JSON desde GitHub al iniciar y commitea los cambios. Token con scope <strong>repo</strong>.
+          </div>
+          <input id="gh-owner"  class="input" placeholder="owner (ej. Steven-website)" value="${escapeHtml(State.config.github?.owner || '')}" />
+          <input id="gh-repo"   class="input" placeholder="repo (ej. elrey-stock-tracker)" value="${escapeHtml(State.config.github?.repo || '')}" />
+          <input id="gh-branch" class="input" placeholder="branch (ej. main)" value="${escapeHtml(State.config.github?.branch || 'main')}" />
+          <input id="gh-path"   class="input mono" placeholder="path (ej. data/db.json)" value="${escapeHtml(State.config.github?.path || 'data/db.json')}" />
+          <input id="gh-token"  class="input mono" type="password" placeholder="GitHub Personal Access Token (ghp_…)" value="${escapeHtml(State.config.github?.token || '')}" />
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
+            <button class="btn btn-primary grow" id="gh-save">Guardar</button>
+            <button class="btn grow" id="gh-load">Cargar de GitHub</button>
+            <button class="btn grow" id="gh-push">Subir a GitHub</button>
+          </div>
+          <div id="gh-status" style="font-size:11px;color:var(--muted);min-height:14px;"></div>
+        </div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-card-header">
           <div class="dash-card-title">${ICON.user} Sesión activa</div>
         </div>
         <div style="padding:12px 16px;">
@@ -1373,6 +1394,46 @@ function _apConfig(el, demo) {
   };
   el.querySelector('#cfg-supabase').onclick = () => { State.modal = 'config'; render(); };
   el.querySelector('#btn-logout-config').onclick = () => { if (!confirm('¿Cerrar sesión?')) return; logout(); render(); };
+
+  // ── Backend GitHub
+  const setGhStatus = (msg, color = 'var(--muted)') => {
+    const s = el.querySelector('#gh-status'); if (s) { s.textContent = msg; s.style.color = color; }
+  };
+  el.querySelector('#gh-save').onclick = () => {
+    State.config.github = {
+      owner:  el.querySelector('#gh-owner').value.trim(),
+      repo:   el.querySelector('#gh-repo').value.trim(),
+      branch: el.querySelector('#gh-branch').value.trim() || 'main',
+      path:   el.querySelector('#gh-path').value.trim()  || 'data/db.json',
+      token:  el.querySelector('#gh-token').value.trim()
+    };
+    Storage.set('config', State.config);
+    toast('Configuración GitHub guardada', 'success');
+    setGhStatus('Guardado. Recargá la app para activar el backend.', 'var(--accent)');
+  };
+  el.querySelector('#gh-load').onclick = async () => {
+    setGhStatus('Cargando desde GitHub…');
+    try {
+      const mod = await import('./githubBackend.js');
+      const r = await mod.loadFromGithub();
+      setGhStatus(r.created ? 'Archivo creado en el repo.' : `Cargado · ${Object.values(r.rows||{}).reduce((a,b)=>a+b,0)} filas totales`, 'var(--success, #4ade80)');
+      toast('Datos cargados desde GitHub', 'success');
+      render();
+    } catch (e) {
+      setGhStatus(`Error: ${e.message}`, 'var(--danger)');
+    }
+  };
+  el.querySelector('#gh-push').onclick = async () => {
+    setGhStatus('Subiendo a GitHub…');
+    try {
+      const mod = await import('./githubBackend.js');
+      const r = await mod.commitToGithub('Push manual desde la app');
+      setGhStatus(`Subido · sha ${r.sha?.slice(0,7)}`, 'var(--success, #4ade80)');
+      toast('Datos subidos a GitHub', 'success');
+    } catch (e) {
+      setGhStatus(`Error: ${e.message}`, 'var(--danger)');
+    }
+  };
 }
 
 // ── Tab: Auditoría ────────────────────────────────────────────────────
