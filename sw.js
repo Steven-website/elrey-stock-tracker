@@ -4,7 +4,7 @@
 //             network-only para llamadas a Supabase
 // =====================================================================
 
-const CACHE = 'elrey-v30';
+const CACHE = 'elrey-v31';
 
 const SHELL = [
   './',
@@ -25,9 +25,11 @@ const SHELL = [
   './qrcode.min.js',
 ];
 
-// Librerías de CDN que queremos pre-cachear en el install para que el
-// escáner / xlsx funcionen aunque el CDN esté caído o el iPhone offline.
+// Recursos opcionales pre-cacheados (best-effort) — si fallan no rompemos
+// el install. Incluye la librería vendorizada local (puede no existir si la
+// action aún no corrió) y los CDNs como respaldo.
 const CDN_LIBS = [
+  './html5-qrcode.min.js',
   'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/html5-qrcode.min.js',
   'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
