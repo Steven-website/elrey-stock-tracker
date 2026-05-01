@@ -2534,3 +2534,62 @@ main {
   color: rgba(255,255,255,0.55);
   font-size: 12px;
 }
+
+/* ── Tab Demo (master) ────────────────────────────────────────────────── */
+.demo-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 8px 4px 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.demo-section-title svg { width: 14px; height: 14px; }
+.demo-caja-card { margin-bottom: 8px; }
+.demo-caja-meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.demo-art-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+.demo-art-row:first-of-type { border-top: none; }
+.demo-art-info { min-width: 0; flex: 1; }
+.demo-art-desc {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.demo-art-meta {
+  font-size: 10px;
+  color: var(--muted);
+}
+.demo-art-qty {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.demo-user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+.demo-user-row:first-child { border-top: none; }
+.demo-user-name { font-size: 12px; font-weight: 700; color: var(--text); }
+.demo-user-meta { font-size: 10px; color: var(--muted); }
+.demo-user-pwd { font-size: 12px; color: var(--accent); }
