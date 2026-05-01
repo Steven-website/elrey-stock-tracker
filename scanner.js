@@ -1,14 +1,17 @@
 // =====================================================================
-// scanner.js — envoltura mínima sobre html5-qrcode
+// scanner.js — escáner con dos backends:
+//   1. BarcodeDetector nativo (iOS Safari 17+, Chrome) — sin dependencias
+//   2. html5-qrcode desde CDN como fallback para navegadores viejos
 // =====================================================================
 
 import { toast, feedback } from './utils.js';
 
-let _scanner = null;
-let _onScanCb = null;
+let _scanner   = null;     // instancia de Html5Qrcode (fallback)
+let _native    = null;     // { stream, video, raf } cuando usamos BarcodeDetector
+let _onScanCb  = null;
 let _libPromise = null;
 
-export function isActive() { return !!_scanner; }
+export function isActive() { return !!_scanner || !!_native; }
 
 // Carga (o re-intenta cargar) html5-qrcode si no está disponible.
 // iOS Safari a veces falla la carga inicial del CDN — re-intentamos al iniciar.
@@ -43,24 +46,57 @@ async function ensureLib() {
   return _libPromise;
 }
 
-export async function startScanner(elementId, onScan, options = {}) {
-  if (_scanner) return; // ya hay uno activo
+// ── Backend 1: BarcodeDetector nativo (iOS 17+, Chrome) ──────────────
+async function startNative(elementId, onScan) {
+  const container = document.getElementById(elementId);
+  if (!container) throw new Error('Contenedor no encontrado');
 
-  if (!navigator.mediaDevices?.getUserMedia) {
-    toast('Tu navegador no permite acceso a la cámara', 'error');
-    return;
-  }
+  const detector = new window.BarcodeDetector({
+    formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
+  });
 
-  try {
-    await ensureLib();
-  } catch (e) {
-    toast('No se pudo cargar el escáner — revisá tu conexión y recargá', 'error');
-    return;
-  }
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: { ideal: 'environment' } }, audio: false
+  });
 
+  container.innerHTML = '';
+  const video = document.createElement('video');
+  video.setAttribute('playsinline', '');
+  video.muted = true;
+  video.style.width = '100%';
+  video.style.height = '100%';
+  video.style.objectFit = 'cover';
+  container.appendChild(video);
+  video.srcObject = stream;
+  await video.play();
+
+  _native = { stream, video, raf: 0, stop: false };
+  _onScanCb = onScan;
+
+  const tick = async () => {
+    if (!_native || _native.stop) return;
+    try {
+      const codes = await detector.detect(video);
+      if (codes && codes.length) {
+        const decoded = codes[0].rawValue;
+        feedback('ok');
+        const cb = _onScanCb;
+        stopScanner();
+        if (cb) cb(decoded);
+        return;
+      }
+    } catch (_) { /* ignorar errores transitorios */ }
+    _native.raf = requestAnimationFrame(tick);
+  };
+  tick();
+}
+
+// ── Backend 2: html5-qrcode (fallback CDN) ────────────────────────────
+async function startFallback(elementId, onScan, options) {
+  await ensureLib();
   _onScanCb = onScan;
   _scanner = new window.Html5Qrcode(elementId, { verbose: false });
-  _scanner.start(
+  await _scanner.start(
     { facingMode: 'environment' },
     {
       fps: options.fps || 10,
@@ -73,25 +109,64 @@ export async function startScanner(elementId, onScan, options = {}) {
       stopScanner();
       if (cb) cb(decoded);
     },
-    () => {} // ignorar "no QR encontrado"
-  ).catch(e => {
+    () => {}
+  );
+}
+
+export async function startScanner(elementId, onScan, options = {}) {
+  if (_scanner || _native) return;
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    toast('Tu navegador no permite acceso a la cámara', 'error');
+    return;
+  }
+
+  // Preferir BarcodeDetector nativo si existe (sin dependencia de internet)
+  if ('BarcodeDetector' in window) {
+    try {
+      await startNative(elementId, onScan);
+      return;
+    } catch (e) {
+      _native = null;
+      const msg = String(e?.message || e || '');
+      if (/permission|notallowed|denied/i.test(msg)) {
+        toast('Permití el acceso a la cámara en Ajustes › Safari', 'error');
+        return;
+      }
+      console.warn('BarcodeDetector falló, intentando fallback:', msg);
+      // continuamos al fallback
+    }
+  }
+
+  // Fallback: html5-qrcode desde CDN
+  try {
+    await startFallback(elementId, onScan, options);
+  } catch (e) {
     _scanner = null;
     const msg = String(e?.message || e || '');
     if (/permission|notallowed|denied/i.test(msg)) {
       toast('Permití el acceso a la cámara en Ajustes › Safari', 'error');
     } else if (/notfound|no.*camera/i.test(msg)) {
       toast('No se detectó cámara en el dispositivo', 'error');
+    } else if (/cargar|html5-qrcode/i.test(msg)) {
+      toast('Tu iPhone no soporta el escáner nativo. Actualizá iOS o usá ingreso manual.', 'error');
     } else {
       toast('No se pudo iniciar la cámara: ' + msg, 'error');
     }
-  });
+  }
 }
 
 export function stopScanner() {
-  if (!_scanner) return;
-  try {
-    _scanner.stop().then(() => _scanner.clear()).catch(()=>{});
-  } catch(e) {}
-  _scanner = null;
+  if (_native) {
+    _native.stop = true;
+    if (_native.raf) cancelAnimationFrame(_native.raf);
+    if (_native.stream) _native.stream.getTracks().forEach(t => t.stop());
+    if (_native.video) _native.video.srcObject = null;
+    _native = null;
+  }
+  if (_scanner) {
+    try { _scanner.stop().then(() => _scanner.clear()).catch(()=>{}); } catch(e) {}
+    _scanner = null;
+  }
   _onScanCb = null;
 }
