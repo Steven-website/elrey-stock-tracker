@@ -1574,13 +1574,13 @@ function _apDemo(el) {
       });
 
       el.querySelector('#demo-download').onclick = () => {
-        const qrUrl = code => `https://api.qrserver.com/v1/create-qr-code/?size=220x220&ecc=M&data=${encodeURIComponent(code)}`;
-        const bcUrl = code => `https://bwipjs-api.metafloor.com/?bcid=ean13&text=${encodeURIComponent(code)}&scale=2&height=20&includetext&textxalign=center`;
+        const qrUrl = code => `https://api.qrserver.com/v1/create-qr-code/?size=160x160&ecc=M&data=${encodeURIComponent(code)}`;
+        const bcUrl = code => `https://bwipjs-api.metafloor.com/?bcid=ean13&text=${encodeURIComponent(code)}&scale=2&height=12&includetext&textxalign=center`;
 
         const cajaLabels = cajas.map(c => `
-          <div style="display:inline-block;width:46%;text-align:center;border:1px dashed #999;padding:10px;margin:0 1% 10px;vertical-align:top;page-break-inside:avoid;">
-            <img src="${qrUrl(c.codigo_caja)}" alt="${escapeHtml(c.codigo_caja)}" style="width:160px;height:160px;" /><br/>
-            <span style="font-family:Consolas,monospace;font-size:11pt;font-weight:bold;">${escapeHtml(c.codigo_caja)}</span>
+          <div style="display:inline-block;width:30%;text-align:center;border:1px dashed #999;padding:5px;margin:0 1% 5px;vertical-align:top;page-break-inside:avoid;">
+            <img src="${qrUrl(c.codigo_caja)}" alt="${escapeHtml(c.codigo_caja)}" style="width:90px;height:90px;" /><br/>
+            <span style="font-family:Consolas,monospace;font-size:8pt;font-weight:bold;">${escapeHtml(c.codigo_caja)}</span>
           </div>`).join('');
 
         const productosUnicos = [];
@@ -1591,9 +1591,9 @@ function _apDemo(el) {
         }));
 
         const prodLabels = productosUnicos.map(a => `
-          <div style="display:inline-block;width:30%;text-align:center;border:1px dashed #999;padding:8px;margin:0 1% 8px;vertical-align:top;page-break-inside:avoid;">
-            <img src="${bcUrl(a.codigo_barras)}" alt="${escapeHtml(a.codigo_barras)}" style="height:55px;" /><br/>
-            <span style="font-family:Consolas,monospace;font-size:10pt;font-weight:bold;">${escapeHtml(a.sku)}</span>
+          <div style="display:inline-block;width:22%;text-align:center;border:1px dashed #999;padding:4px;margin:0 1% 5px;vertical-align:top;page-break-inside:avoid;">
+            <img src="${bcUrl(a.codigo_barras)}" alt="${escapeHtml(a.codigo_barras)}" style="height:35px;" /><br/>
+            <span style="font-family:Consolas,monospace;font-size:8pt;font-weight:bold;">${escapeHtml(a.sku)}</span>
           </div>`).join('');
 
         const html = `<!DOCTYPE html>
