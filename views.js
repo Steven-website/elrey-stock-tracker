@@ -149,14 +149,14 @@ export function renderShell() {
   const isContador   = State.user?.rol === 'contador';
   const contadorOnly = isContador;
 
-  if (adminOnly && State.view !== 'mov' && State.view !== 'mas') {
+  if (adminOnly && !['mov', 'mas', 'imprimir'].includes(State.view)) {
     State.view = 'mas';
   }
   if (contadorOnly && !['conteo', 'perfil'].includes(State.view)) {
     State.view = 'conteo';
   }
 
-  const canPrint = State.user?.rol === 'operario';
+  const canPrint = State.user?.rol === 'operario' || adminOnly;
 
   const main = $(`<main></main>`);
   if (contadorOnly) {
@@ -173,8 +173,9 @@ export function renderShell() {
     else if (State.view === 'mas')                     main.appendChild(renderMasView());
     else                                               main.appendChild(renderScanView());
   } else {
-    if (State.view === 'mov') main.appendChild(renderMovView());
-    else                      main.appendChild(renderMasView());
+    if      (State.view === 'mov')      main.appendChild(renderMovView());
+    else if (State.view === 'imprimir') main.appendChild(renderImprimirView());
+    else                                main.appendChild(renderMasView());
   }
   wrap.appendChild(main);
 
@@ -182,8 +183,9 @@ export function renderShell() {
   const nav = adminOnly
     ? $(`
       <nav class="tabs">
-        <button data-v="mov"    class="${State.view==='mov'?'active':''}">${ICON.list}<span>Movimientos</span>${pending > 0 ? `<span class="nav-badge">${pending}</span>` : ''}</button>
-        <button data-v="mas"    class="${State.view==='mas'?'active':''}">${ICON.shield}<span>Admin</span></button>
+        <button data-v="mov"      class="${State.view==='mov'?'active':''}">${ICON.list}<span>Movimientos</span>${pending > 0 ? `<span class="nav-badge">${pending}</span>` : ''}</button>
+        <button data-v="imprimir" class="${State.view==='imprimir'?'active':''}">${ICON.qr}<span>Imprimir</span></button>
+        <button data-v="mas"      class="${State.view==='mas'?'active':''}">${ICON.shield}<span>Admin</span></button>
         <button class="nav-logout" id="nav-logout-btn">${ICON.logout}<span>Cerrar sesión</span></button>
       </nav>
     `)
