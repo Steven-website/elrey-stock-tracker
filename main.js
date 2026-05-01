@@ -6,6 +6,7 @@ import { State, Storage, isDemoMode } from './state.js';
 import { API, initSupabase } from './api.js';
 import { getQueue, dequeue, getPendingCount } from './queue.js';
 import { initMockPasswords } from './mock.js';
+import { isGithubMode, loadFromGithub, startAutoSync } from './githubBackend.js';
 import { stopScanner } from './scanner.js';
 import { $ } from './utils.js';
 import { logEvent } from './audit.js';
@@ -154,11 +155,25 @@ async function checkSession() {
 // BOOT
 // =====================================================================
 async function boot() {
+  // Si hay backend GitHub configurado, descargar el JSON y poblar MOCK
+  if (isGithubMode()) {
+    try {
+      await loadFromGithub();
+      console.log('[github] datos cargados desde GitHub');
+    } catch (e) {
+      console.error('[github] no se pudo cargar:', e.message);
+    }
+  }
+
   // Inicializar contraseñas demo (hash) si estamos en modo demo
+  // (no sobrescribe hashes ya seteados desde GitHub)
   await initMockPasswords();
 
   // Conectar a Supabase si hay configuración
   initSupabase();
+
+  // Auto-sync periódico al GitHub (commit en cada cambio detectado)
+  if (isGithubMode()) startAutoSync(8000);
 
   // Render inicial
   render();

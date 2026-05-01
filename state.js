@@ -25,7 +25,7 @@ export const Storage = {
 
 // Estado global (objeto reactivo plano; cambios disparan render() manualmente)
 export const State = {
-  config: Storage.get('config') || { url: '', anonKey: '' },
+  config: Storage.get('config') || { url: '', anonKey: '', github: null },
   user: Storage.get('user') || null,
   view: 'scan',
   modal: null,
