@@ -12,16 +12,34 @@ export function isActive() { return !!_scanner; }
 
 // Carga (o re-intenta cargar) html5-qrcode si no está disponible.
 // iOS Safari a veces falla la carga inicial del CDN — re-intentamos al iniciar.
-function ensureLib() {
-  if (window.Html5Qrcode) return Promise.resolve(true);
-  if (_libPromise) return _libPromise;
-  _libPromise = new Promise((resolve, reject) => {
+const _LIB_URLS = [
+  'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/html5-qrcode.min.js',
+  'https://unpkg.com/html5-qrcode@2.3.10/html5-qrcode.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.10/html5-qrcode.min.js'
+];
+
+function _loadScript(url) {
+  return new Promise((resolve, reject) => {
     const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/html5-qrcode.min.js';
+    s.src = url;
     s.onload  = () => resolve(true);
-    s.onerror = () => reject(new Error('No se pudo cargar el escáner'));
+    s.onerror = () => reject(new Error('load fail: ' + url));
     document.head.appendChild(s);
   });
+}
+
+async function ensureLib() {
+  if (window.Html5Qrcode) return true;
+  if (_libPromise) return _libPromise;
+  _libPromise = (async () => {
+    for (const url of _LIB_URLS) {
+      try {
+        await _loadScript(url);
+        if (window.Html5Qrcode) return true;
+      } catch (_) { /* probar siguiente CDN */ }
+    }
+    throw new Error('No se pudo cargar html5-qrcode desde ningún CDN');
+  })();
   return _libPromise;
 }
 

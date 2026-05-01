@@ -4,7 +4,7 @@
 //             network-only para llamadas a Supabase
 // =====================================================================
 
-const CACHE = 'elrey-v27';
+const CACHE = 'elrey-v28';
 
 const SHELL = [
   './',
@@ -25,11 +25,23 @@ const SHELL = [
   './qrcode.min.js',
 ];
 
+// Librerías de CDN que queremos pre-cachear en el install para que el
+// escáner / xlsx funcionen aunque el CDN esté caído o el iPhone offline.
+const CDN_LIBS = [
+  'https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.10/html5-qrcode.min.js',
+  'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
+];
+
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE)
-      .then(c => c.addAll(SHELL))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE).then(async c => {
+      await c.addAll(SHELL);
+      // CDN libs: best-effort, no rompemos el install si una falla
+      await Promise.all(CDN_LIBS.map(u =>
+        fetch(u, { mode: 'no-cors' }).then(r => c.put(u, r)).catch(() => {})
+      ));
+    }).then(() => self.skipWaiting())
   );
 });
 
@@ -46,23 +58,21 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // Network-only: Supabase, CDN, Google Fonts, QR API
+  // Network-only para datos en vivo (no queremos cachear respuestas Supabase)
   if (
     url.hostname.includes('supabase.co') ||
-    url.hostname.includes('cdn.jsdelivr.net') ||
-    url.hostname.includes('fonts.googleapis.com') ||
-    url.hostname.includes('fonts.gstatic.com') ||
     url.hostname.includes('api.qrserver.com')
   ) return;
 
-  // Cache-first para archivos locales de la app
+  // Cache-first con fallback a red para todo lo demás (incluye CDNs y fuentes)
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
       return fetch(e.request).then(res => {
-        if (!res || res.status !== 200 || res.type === 'opaque') return res;
+        // Cacheamos también respuestas opaque (no-cors) — sirven para script/img
+        if (!res) return res;
         const clone = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, clone));
+        caches.open(CACHE).then(c => c.put(e.request, clone)).catch(()=>{});
         return res;
       }).catch(() => caches.match('./index.html'));
     })
