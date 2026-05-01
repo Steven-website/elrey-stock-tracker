@@ -1574,14 +1574,8 @@ function _apDemo(el) {
       });
 
       el.querySelector('#demo-download').onclick = () => {
-        const qrUrl = code => `https://api.qrserver.com/v1/create-qr-code/?size=160x160&ecc=M&data=${encodeURIComponent(code)}`;
-        const bcUrl = code => `https://bwipjs-api.metafloor.com/?bcid=ean13&text=${encodeURIComponent(code)}&scale=2&height=12&includetext&textxalign=center`;
-
-        const cajaLabels = cajas.map(c => `
-          <div style="display:inline-block;width:30%;text-align:center;border:1px dashed #999;padding:5px;margin:0 1% 5px;vertical-align:top;page-break-inside:avoid;">
-            <img src="${qrUrl(c.codigo_caja)}" alt="${escapeHtml(c.codigo_caja)}" style="width:90px;height:90px;" /><br/>
-            <span style="font-family:Consolas,monospace;font-size:8pt;font-weight:bold;">${escapeHtml(c.codigo_caja)}</span>
-          </div>`).join('');
+        const qrUrl = code => `https://api.qrserver.com/v1/create-qr-code/?size=140x140&ecc=M&data=${encodeURIComponent(code)}`;
+        const bcUrl = code => `https://bwipjs-api.metafloor.com/?bcid=ean13&text=${encodeURIComponent(code)}&scale=2&height=10&includetext&textxalign=center`;
 
         const productosUnicos = [];
         const seen = new Set();
@@ -1590,11 +1584,28 @@ function _apDemo(el) {
           if (a && !seen.has(a.id)) { seen.add(a.id); productosUnicos.push(a); }
         }));
 
-        const prodLabels = productosUnicos.map(a => `
-          <div style="display:inline-block;width:22%;text-align:center;border:1px dashed #999;padding:4px;margin:0 1% 5px;vertical-align:top;page-break-inside:avoid;">
-            <img src="${bcUrl(a.codigo_barras)}" alt="${escapeHtml(a.codigo_barras)}" style="height:35px;" /><br/>
-            <span style="font-family:Consolas,monospace;font-size:8pt;font-weight:bold;">${escapeHtml(a.sku)}</span>
-          </div>`).join('');
+        const cellStyle = 'border:1px dashed #999;padding:6px;text-align:center;vertical-align:top;width:20%;';
+        const cajaCells = cajas.map(c => `
+          <td style="${cellStyle}">
+            <img src="${qrUrl(c.codigo_caja)}" alt="${escapeHtml(c.codigo_caja)}" style="width:70px;height:70px;display:block;margin:0 auto 3px;" />
+            <span style="font-family:Consolas,monospace;font-size:7pt;font-weight:bold;">${escapeHtml(c.codigo_caja)}</span>
+          </td>`).join('');
+
+        const prodCells = productosUnicos.map(a => `
+          <td style="${cellStyle}">
+            <img src="${bcUrl(a.codigo_barras)}" alt="${escapeHtml(a.codigo_barras)}" style="height:28px;display:block;margin:0 auto 3px;" />
+            <span style="font-family:Consolas,monospace;font-size:7pt;font-weight:bold;">${escapeHtml(a.sku)}</span>
+          </td>`).join('');
+
+        // 5 columnas: las 5 cajas en una sola fila, los 10 productos en 2 filas de 5
+        const cajaTable = `<table style="border-collapse:collapse;width:100%;table-layout:fixed;"><tr>${cajaCells}</tr></table>`;
+        const prodRow1 = productosUnicos.slice(0,5).map(a => `<td style="${cellStyle}">
+            <img src="${bcUrl(a.codigo_barras)}" style="height:28px;display:block;margin:0 auto 3px;" />
+            <span style="font-family:Consolas,monospace;font-size:7pt;font-weight:bold;">${escapeHtml(a.sku)}</span></td>`).join('');
+        const prodRow2 = productosUnicos.slice(5,10).map(a => `<td style="${cellStyle}">
+            <img src="${bcUrl(a.codigo_barras)}" style="height:28px;display:block;margin:0 auto 3px;" />
+            <span style="font-family:Consolas,monospace;font-size:7pt;font-weight:bold;">${escapeHtml(a.sku)}</span></td>`).join('');
+        const prodTable = `<table style="border-collapse:collapse;width:100%;table-layout:fixed;"><tr>${prodRow1}</tr><tr>${prodRow2}</tr></table>`;
 
         const html = `<!DOCTYPE html>
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
@@ -1603,10 +1614,10 @@ function _apDemo(el) {
 <style>@page { size: A4; margin: 1.5cm; } body { font-family: Arial, sans-serif; }</style>
 </head>
 <body>
-  <h2 style="font-size:13pt;margin:0 0 8px;">Cajas</h2>
-  ${cajaLabels}
-  <h2 style="font-size:13pt;margin:14px 0 8px;page-break-before:always;">Productos</h2>
-  ${prodLabels}
+  <h2 style="font-size:11pt;margin:0 0 4px;">Cajas</h2>
+  ${cajaTable}
+  <h2 style="font-size:11pt;margin:10px 0 4px;">Productos</h2>
+  ${prodTable}
 </body></html>`;
 
         const blob = new Blob(['﻿', html], { type: 'application/msword' });
