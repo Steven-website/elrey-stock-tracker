@@ -93,28 +93,26 @@ export const MOCK = {
 
   cajas: [
     // ── Alajuela Centro ──────────────────────────────────────────────────
+    // 1 caja = 1 código de producto (para validación e impresión por master)
     {
       id: 1, codigo_caja: 'ELRY-A01-CJ-A7B2K9M4', tipo_caja: 'producto',    estado: 'activa',
       posicion_id: 1, tienda_id: 1, fecha_creacion: '2026-04-10T08:30:00Z',
       contenido: [
-        { articulo_id: 1, cantidad_inicial: 20, cantidad_actual: 1 },
-        { articulo_id: 2, cantidad_inicial: 24, cantidad_actual: 17 }
+        { articulo_id: 1, cantidad_inicial: 20, cantidad_actual: 20 }   // CAN-001 · 7501234500011
       ]
     },
     {
       id: 2, codigo_caja: 'ELRY-A01-CJ-B3D5F7H1', tipo_caja: 'producto',    estado: 'activa',
       posicion_id: 3, tienda_id: 1, fecha_creacion: '2026-04-15T11:20:00Z',
       contenido: [
-        { articulo_id: 6, cantidad_inicial: 10, cantidad_actual: 7 },
-        { articulo_id: 7, cantidad_inicial: 24, cantidad_actual: 24 }
+        { articulo_id: 7, cantidad_inicial: 24, cantidad_actual: 24 }   // INT-001 · 7501234500073
       ]
     },
     {
       id: 3, codigo_caja: 'ELRY-A01-CJ-X9Y8Z7W6', tipo_caja: 'reutilizable', estado: 'activa',
       posicion_id: 4, tienda_id: 1, fecha_creacion: '2026-04-20T09:00:00Z',
       contenido: [
-        { articulo_id: 5,  cantidad_inicial: 15, cantidad_actual: 8 },
-        { articulo_id: 10, cantidad_inicial: 50, cantidad_actual: 43 }
+        { articulo_id: 10, cantidad_inicial: 50, cantidad_actual: 50 }  // LIJ-001 · 7501234500104
       ]
     },
     // ── Heredia ──────────────────────────────────────────────────────────
@@ -122,16 +120,14 @@ export const MOCK = {
       id: 4, codigo_caja: 'ELRY-H01-CJ-C4E6G8J2', tipo_caja: 'producto',    estado: 'activa',
       posicion_id: 5, tienda_id: 2, fecha_creacion: '2026-04-12T10:00:00Z',
       contenido: [
-        { articulo_id: 3, cantidad_inicial: 12, cantidad_actual: 12 },
-        { articulo_id: 4, cantidad_inicial: 50, cantidad_actual: 38 }
+        { articulo_id: 3, cantidad_inicial: 12, cantidad_actual: 12 }   // CAN-003 · 7501234500035
       ]
     },
     {
       id: 5, codigo_caja: 'ELRY-H01-CJ-D7F9H1K3', tipo_caja: 'producto',    estado: 'activa',
       posicion_id: 5, tienda_id: 2, fecha_creacion: '2026-04-18T14:30:00Z',
       contenido: [
-        { articulo_id: 8, cantidad_inicial: 12, cantidad_actual: 9 },
-        { articulo_id: 9, cantidad_inicial: 10, cantidad_actual: 10 }
+        { articulo_id: 8, cantidad_inicial: 12, cantidad_actual: 12 }   // PEG-001 · 7501234500080
       ]
     }
   ],
@@ -155,18 +151,11 @@ export const MOCK = {
   conteo_registros: [],
 
   movimientos: [
-    { id: 12, tipo: 'crear_caja',  caja_id: 5, articulo_id: null, cantidad: null, usuario_id: 6, motivo: 'Recepción proveedor H01',  creado_at: '2026-04-18T14:30:00Z' },
-    { id: 11, tipo: 'reducir',     caja_id: 4, articulo_id: 4,   cantidad: 12,   usuario_id: 7, motivo: 'Venta',                    creado_at: '2026-04-25T09:15:00Z' },
-    { id: 10, tipo: 'crear_caja',  caja_id: 4, articulo_id: null, cantidad: null, usuario_id: 6, motivo: 'Recepción proveedor H01',  creado_at: '2026-04-12T10:00:00Z' },
-    { id: 9,  tipo: 'reducir',     caja_id: 3, articulo_id: 5,   cantidad: 7,    usuario_id: 3, motivo: 'Venta',                    creado_at: '2026-04-26T14:32:00Z' },
-    { id: 8,  tipo: 'crear_caja',  caja_id: 3, articulo_id: null, cantidad: null, usuario_id: 2, motivo: 'Reposición exhibición',    creado_at: '2026-04-20T09:00:00Z' },
-    { id: 7,  tipo: 'reducir',     caja_id: 2, articulo_id: 6,   cantidad: 3,    usuario_id: 3, motivo: 'Venta',                    creado_at: '2026-04-26T11:10:00Z' },
-    { id: 6,  tipo: 'crear_caja',  caja_id: 2, articulo_id: null, cantidad: null, usuario_id: 1, motivo: 'Recepción de proveedor',   creado_at: '2026-04-15T11:20:00Z' },
-    { id: 5,  tipo: 'reducir',     caja_id: 1, articulo_id: 2,   cantidad: 7,    usuario_id: 3, motivo: 'Venta',                    creado_at: '2026-04-26T10:05:00Z' },
-    { id: 4,  tipo: 'reducir',     caja_id: 1, articulo_id: 2,   cantidad: 3,    usuario_id: 3, motivo: 'Venta',                    creado_at: '2026-04-19T10:05:00Z' },
-    { id: 3,  tipo: 'reducir',     caja_id: 1, articulo_id: 1,   cantidad: 10,   usuario_id: 2, motivo: 'Traslado a exhibición',     creado_at: '2026-04-18T15:42:00Z' },
-    { id: 2,  tipo: 'reducir',     caja_id: 1, articulo_id: 1,   cantidad: 9,    usuario_id: 3, motivo: 'Venta',                    creado_at: '2026-04-17T09:20:00Z' },
-    { id: 1,  tipo: 'crear_caja',  caja_id: 1, articulo_id: null, cantidad: null, usuario_id: 1, motivo: 'Recepción de proveedor',   creado_at: '2026-04-10T08:30:00Z' }
+    { id: 5, tipo: 'crear_caja', caja_id: 5, articulo_id: null, cantidad: null, usuario_id: 6, motivo: 'Recepción proveedor H01', creado_at: '2026-04-18T14:30:00Z' },
+    { id: 4, tipo: 'crear_caja', caja_id: 4, articulo_id: null, cantidad: null, usuario_id: 6, motivo: 'Recepción proveedor H01', creado_at: '2026-04-12T10:00:00Z' },
+    { id: 3, tipo: 'crear_caja', caja_id: 3, articulo_id: null, cantidad: null, usuario_id: 2, motivo: 'Reposición exhibición',   creado_at: '2026-04-20T09:00:00Z' },
+    { id: 2, tipo: 'crear_caja', caja_id: 2, articulo_id: null, cantidad: null, usuario_id: 1, motivo: 'Recepción de proveedor',  creado_at: '2026-04-15T11:20:00Z' },
+    { id: 1, tipo: 'crear_caja', caja_id: 1, articulo_id: null, cantidad: null, usuario_id: 1, motivo: 'Recepción de proveedor',  creado_at: '2026-04-10T08:30:00Z' }
   ]
 };
 
