@@ -4,7 +4,7 @@
 //             network-only para llamadas a Supabase
 // =====================================================================
 
-const CACHE = 'elrey-v28';
+const CACHE = 'elrey-v29';
 
 const SHELL = [
   './',
@@ -69,12 +69,20 @@ self.addEventListener('fetch', e => {
     caches.match(e.request).then(cached => {
       if (cached) return cached;
       return fetch(e.request).then(res => {
-        // Cacheamos también respuestas opaque (no-cors) — sirven para script/img
         if (!res) return res;
-        const clone = res.clone();
-        caches.open(CACHE).then(c => c.put(e.request, clone)).catch(()=>{});
+        // Solo cacheamos respuestas exitosas u opaque (CDN no-cors). Nunca un 404.
+        if (res.status === 200 || res.type === 'opaque') {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone)).catch(()=>{});
+        }
         return res;
-      }).catch(() => caches.match('./index.html'));
+      }).catch(() => {
+        // El fallback a index.html SOLO aplica a navegación. Para script/img/etc
+        // dejamos que el error suba para que el llamador lo maneje (no servir HTML
+        // como si fuera JS — eso rompía el escáner).
+        if (e.request.mode === 'navigate') return caches.match('./index.html');
+        return Response.error();
+      });
     })
   );
 });
