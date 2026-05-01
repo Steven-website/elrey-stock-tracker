@@ -93,18 +93,20 @@ export const MOCK = {
 
   cajas: [
     // ── Alajuela Centro ──────────────────────────────────────────────────
-    // 1 caja = 1 código de producto (para validación e impresión por master)
+    // 5 cajas demo · cada caja con 2 productos para simulaciones multi-rol
     {
       id: 1, codigo_caja: 'ELRY-A01-CJ-A7B2K9M4', tipo_caja: 'producto',    estado: 'activa',
       posicion_id: 1, tienda_id: 1, fecha_creacion: '2026-04-10T08:30:00Z',
       contenido: [
-        { articulo_id: 1, cantidad_inicial: 20, cantidad_actual: 20 }   // CAN-001 · 7501234500011
+        { articulo_id: 1, cantidad_inicial: 20, cantidad_actual: 20 },  // CAN-001 · 7501234500011
+        { articulo_id: 2, cantidad_inicial: 24, cantidad_actual: 24 }   // CAN-002 · 7501234500028
       ]
     },
     {
       id: 2, codigo_caja: 'ELRY-A01-CJ-B3D5F7H1', tipo_caja: 'producto',    estado: 'activa',
       posicion_id: 3, tienda_id: 1, fecha_creacion: '2026-04-15T11:20:00Z',
       contenido: [
+        { articulo_id: 6, cantidad_inicial: 10, cantidad_actual: 10 },  // TOM-001 · 7501234500066
         { articulo_id: 7, cantidad_inicial: 24, cantidad_actual: 24 }   // INT-001 · 7501234500073
       ]
     },
@@ -112,6 +114,7 @@ export const MOCK = {
       id: 3, codigo_caja: 'ELRY-A01-CJ-X9Y8Z7W6', tipo_caja: 'reutilizable', estado: 'activa',
       posicion_id: 4, tienda_id: 1, fecha_creacion: '2026-04-20T09:00:00Z',
       contenido: [
+        { articulo_id: 5,  cantidad_inicial: 15, cantidad_actual: 15 }, // EXT-001 · 7501234500059
         { articulo_id: 10, cantidad_inicial: 50, cantidad_actual: 50 }  // LIJ-001 · 7501234500104
       ]
     },
@@ -120,14 +123,16 @@ export const MOCK = {
       id: 4, codigo_caja: 'ELRY-H01-CJ-C4E6G8J2', tipo_caja: 'producto',    estado: 'activa',
       posicion_id: 5, tienda_id: 2, fecha_creacion: '2026-04-12T10:00:00Z',
       contenido: [
-        { articulo_id: 3, cantidad_inicial: 12, cantidad_actual: 12 }   // CAN-003 · 7501234500035
+        { articulo_id: 3, cantidad_inicial: 12, cantidad_actual: 12 },  // CAN-003 · 7501234500035
+        { articulo_id: 4, cantidad_inicial: 50, cantidad_actual: 50 }   // BOM-001 · 7501234500042
       ]
     },
     {
       id: 5, codigo_caja: 'ELRY-H01-CJ-D7F9H1K3', tipo_caja: 'producto',    estado: 'activa',
       posicion_id: 5, tienda_id: 2, fecha_creacion: '2026-04-18T14:30:00Z',
       contenido: [
-        { articulo_id: 8, cantidad_inicial: 12, cantidad_actual: 12 }   // PEG-001 · 7501234500080
+        { articulo_id: 8, cantidad_inicial: 12, cantidad_actual: 12 },  // PEG-001 · 7501234500080
+        { articulo_id: 9, cantidad_inicial: 10, cantidad_actual: 10 }   // TUB-001 · 7501234500097
       ]
     }
   ],

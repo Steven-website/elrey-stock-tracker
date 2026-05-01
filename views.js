@@ -1010,6 +1010,7 @@ function renderAdminMasView() {
       <button class="ap-tab ${tab==='indicadores'?'active':''}" data-tab="indicadores">${ICON.filter} Indicadores</button>
       <button class="ap-tab ${tab==='config'     ?'active':''}" data-tab="config">${ICON.settings} Config.</button>
       <button class="ap-tab ${tab==='auditoria'  ?'active':''}" data-tab="auditoria">${ICON.shield} Auditoría</button>
+      <button class="ap-tab ${tab==='demo'       ?'active':''}" data-tab="demo">${ICON.qr} Demo</button>
     </nav>
 
     <div class="ap-content" id="ap-content"></div>
@@ -1031,6 +1032,7 @@ function renderAdminMasView() {
     case 'indicadores': _apIndicadores(content); break;
     case 'config':      _apConfig(content, demo); break;
     case 'auditoria':   _apAuditoria(content);   break;
+    case 'demo':        _apDemo(content);        break;
   }
 
   return wrap;
@@ -1415,6 +1417,131 @@ function _apAuditoria(el) {
     clearAuditLog();
     _apAuditoria(el);
   };
+}
+
+// ── Tab: Demo (códigos de cajas + productos + usuarios para simulación) ─
+const DEMO_USERS = [
+  { username: 'SSEGURA',     password: 'admin123',   rol: 'admin',           tienda: 'Alajuela' },
+  { username: 'LADMIN',      password: 'tienda123',  rol: 'admin_tienda',    tienda: 'Alajuela' },
+  { username: 'JINVENTARIO', password: 'jinv123',    rol: 'jefe_inventario', tienda: 'Todas' },
+  { username: 'MROJAS',      password: 'super123',   rol: 'supervisor',      tienda: 'Alajuela' },
+  { username: 'HGOMEZ',      password: 'super456',   rol: 'supervisor',      tienda: 'Heredia'  },
+  { username: 'JMARTINEZ',   password: 'oper123',    rol: 'operario',        tienda: 'Alajuela' },
+  { username: 'KLOPEZ',      password: 'oper456',    rol: 'operario',        tienda: 'Heredia'  },
+  { username: 'CCONTADOR',   password: 'cont123',    rol: 'contador',        tienda: 'Alajuela' },
+  { username: 'AUDITOR',     password: 'audit123',   rol: 'auditor',         tienda: 'Alajuela' }
+];
+
+function _apDemo(el) {
+  el.innerHTML = `<div style="display:flex;justify-content:center;padding:32px;"><div class="loader"></div></div>`;
+
+  Promise.all([API.listCajas(true), API.listArticulos(), API.listTiendas()])
+    .then(([cajas, articulos, tiendas]) => {
+      const artMap    = Object.fromEntries(articulos.map(a => [a.id, a]));
+      const tiendaMap = Object.fromEntries(tiendas.map(t => [t.id, t]));
+
+      const cajasHtml = cajas.map(c => {
+        const tienda = tiendaMap[c.tienda_id]?.nombre || '—';
+        const pos    = c.posicion ? `${c.posicion.ubicacion || ''} · ${c.posicion.descripcion || ''}` : '—';
+        const items  = (c.contenido || []).map(it => {
+          const a = artMap[it.articulo_id];
+          if (!a) return '';
+          return `
+            <div class="demo-art-row">
+              <div class="demo-art-info">
+                <div class="demo-art-desc">${escapeHtml(a.descripcion)}</div>
+                <div class="demo-art-meta mono">${escapeHtml(a.sku)} · ${escapeHtml(a.codigo_barras)}</div>
+              </div>
+              <div class="demo-art-qty mono">${it.cantidad_actual}</div>
+            </div>`;
+        }).join('');
+
+        return `
+          <div class="dash-card demo-caja-card">
+            <div class="dash-card-header">
+              <div class="dash-card-title">
+                ${ICON.box}
+                <span class="mono" style="font-size:13px;">${escapeHtml(c.codigo_caja)}</span>
+              </div>
+              <button class="btn btn-sm" data-print="${escapeHtml(c.codigo_caja)}">${ICON.qr} QR</button>
+            </div>
+            <div style="padding:8px 14px 12px;">
+              <div class="demo-caja-meta">${escapeHtml(tienda)} · ${escapeHtml(pos)}</div>
+              ${items}
+            </div>
+          </div>`;
+      }).join('');
+
+      const usersHtml = DEMO_USERS.map(u => `
+        <div class="demo-user-row">
+          <div>
+            <div class="demo-user-name mono">${escapeHtml(u.username)}</div>
+            <div class="demo-user-meta">${escapeHtml(u.rol)} · ${escapeHtml(u.tienda)}</div>
+          </div>
+          <div class="demo-user-pwd mono">${escapeHtml(u.password)}</div>
+        </div>
+      `).join('');
+
+      el.innerHTML = `
+        <div style="padding:12px;">
+          <div class="dash-card" style="margin-bottom:12px;">
+            <div class="dash-card-header">
+              <div class="dash-card-title">${ICON.qr} Demo · datos de simulación</div>
+              <button class="btn btn-sm btn-primary" id="demo-download">${ICON.download || '⬇'} Descargar</button>
+            </div>
+            <div style="padding:10px 14px 14px;font-size:12px;color:var(--muted);">
+              5 cajas con 2 productos cada una y los 9 usuarios demo.
+              Usá "Descargar" para exportar todos los códigos a JSON e imprimirlos.
+            </div>
+          </div>
+
+          <div class="demo-section-title">${ICON.box} Cajas (${cajas.length})</div>
+          ${cajasHtml}
+
+          <div class="demo-section-title" style="margin-top:14px;">${ICON.user} Usuarios demo (${DEMO_USERS.length})</div>
+          <div class="dash-card">
+            <div style="padding:6px 14px 10px;">${usersHtml}</div>
+          </div>
+        </div>
+      `;
+
+      el.querySelectorAll('button[data-print]').forEach(btn => {
+        btn.onclick = () => {
+          State.cache.printCode = btn.dataset.print;
+          State.modal = 'print';
+          render();
+        };
+      });
+
+      el.querySelector('#demo-download').onclick = () => {
+        const payload = {
+          generado_en: new Date().toISOString(),
+          tiendas,
+          usuarios: DEMO_USERS,
+          cajas: cajas.map(c => ({
+            codigo_caja: c.codigo_caja,
+            tipo_caja:   c.tipo_caja,
+            tienda:      tiendaMap[c.tienda_id]?.nombre,
+            posicion:    c.posicion ? `${c.posicion.ubicacion} · ${c.posicion.descripcion}` : null,
+            productos: (c.contenido || []).map(it => {
+              const a = artMap[it.articulo_id] || {};
+              return { sku: a.sku, codigo_barras: a.codigo_barras, descripcion: a.descripcion, cantidad: it.cantidad_actual };
+            })
+          }))
+        };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url;
+        a.download = `demo-elrey-${new Date().toISOString().slice(0,10)}.json`;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+        toast('Demo descargado', 'success');
+      };
+    })
+    .catch(e => {
+      el.innerHTML = `<div class="empty" style="padding:40px;"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
+    });
 }
 
 // ── Tab: Ubicaciones (Bodega → Pasillo → Estante) ─────────────────────
