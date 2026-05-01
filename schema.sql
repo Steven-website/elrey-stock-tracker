@@ -281,15 +281,15 @@ SELECT setval(pg_get_serial_sequence('posiciones','id'), 6);
 
 -- Artículos (10)
 INSERT INTO articulos (id, codigo_barras, sku, descripcion, familia, unidades_por_caja) VALUES
-  (1,  '7501234500011', 'CAN-001', 'Candil LED 60W blanco',           'Iluminación', 20),
-  (2,  '7501234500028', 'CAN-002', 'Candil LED 40W cálido',           'Iluminación', 24),
-  (3,  '7501234500035', 'CAN-003', 'Candil LED solar exterior',       'Iluminación', 12),
-  (4,  '7501234500042', 'BOM-001', 'Bombillo halógeno 100W',          'Iluminación', 50),
-  (5,  '7501234500059', 'EXT-001', 'Extensión eléctrica 3 m',         'Eléctrico',   NULL),
-  (6,  '7501234500066', 'TOM-001', 'Tomacorriente doble polarizado',  'Eléctrico',   10),
-  (7,  '7501234500073', 'INT-001', 'Interruptor sencillo',            'Eléctrico',   24),
-  (8,  '7501234500080', 'PEG-001', 'Pegamento PVC 250 ml',            'Plomería',    12),
-  (9,  '7501234500097', 'TUB-001', 'Tubo PVC 1/2" × 3 m',             'Plomería',    10),
+  (1,  '7501234500012', 'CAN-001', 'Candil LED 60W blanco',           'Iluminación', 20),
+  (2,  '7501234500029', 'CAN-002', 'Candil LED 40W cálido',           'Iluminación', 24),
+  (3,  '7501234500036', 'CAN-003', 'Candil LED solar exterior',       'Iluminación', 12),
+  (4,  '7501234500043', 'BOM-001', 'Bombillo halógeno 100W',          'Iluminación', 50),
+  (5,  '7501234500050', 'EXT-001', 'Extensión eléctrica 3 m',         'Eléctrico',   NULL),
+  (6,  '7501234500067', 'TOM-001', 'Tomacorriente doble polarizado',  'Eléctrico',   10),
+  (7,  '7501234500074', 'INT-001', 'Interruptor sencillo',            'Eléctrico',   24),
+  (8,  '7501234500081', 'PEG-001', 'Pegamento PVC 250 ml',            'Plomería',    12),
+  (9,  '7501234500098', 'TUB-001', 'Tubo PVC 1/2" × 3 m',             'Plomería',    10),
   (10, '7501234500104', 'LIJ-001', 'Lija de agua grano 120',          'Ferretería',  50);
 SELECT setval(pg_get_serial_sequence('articulos','id'), 10);
 

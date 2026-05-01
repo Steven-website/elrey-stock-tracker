@@ -1576,7 +1576,7 @@ function _apDemo(el) {
 
       el.querySelector('#demo-download').onclick = () => {
         const qrUrl = code => `https://api.qrserver.com/v1/create-qr-code/?size=220x220&ecc=M&data=${encodeURIComponent(code)}`;
-        const bcUrl = code => `https://bwipjs-api.metafloor.com/?bcid=code128&text=${encodeURIComponent(code)}&scale=2&height=14&includetext&textxalign=center`;
+        const bcUrl = code => `https://bwipjs-api.metafloor.com/?bcid=ean13&text=${encodeURIComponent(code)}&scale=2&height=14&includetext&textxalign=center`;
 
         const cajaSections = cajas.map(c => {
           const tienda = tiendaMap[c.tienda_id]?.nombre || '—';
