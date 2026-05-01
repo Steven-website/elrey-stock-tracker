@@ -1611,13 +1611,19 @@ function _apDemo(el) {
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
 <head><meta charset="utf-8" /><title>Demo El Rey · Etiquetas</title>
 <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
-<style>@page { size: A4; margin: 1.5cm; } body { font-family: Arial, sans-serif; }</style>
+<style>
+  @page Section1 { size: 29.7cm 21cm; mso-page-orientation: landscape; margin: 1.2cm; }
+  div.Section1 { page: Section1; }
+  body { font-family: Arial, sans-serif; }
+</style>
 </head>
 <body>
-  <h2 style="font-size:11pt;margin:0 0 4px;">Cajas</h2>
-  ${cajaTable}
-  <h2 style="font-size:11pt;margin:10px 0 4px;">Productos</h2>
-  ${prodTable}
+  <div class="Section1">
+    <h2 style="font-size:11pt;margin:0 0 4px;">Cajas</h2>
+    ${cajaTable}
+    <h2 style="font-size:11pt;margin:10px 0 4px;">Productos</h2>
+    ${prodTable}
+  </div>
 </body></html>`;
 
         const blob = new Blob(['﻿', html], { type: 'application/msword' });
