@@ -718,7 +718,7 @@ export function renderCreateBoxModal() {
           } else {
             toast(`⚠ El QR escaneado no coincide (${decoded.slice(0,12)}…)`, 'error');
           }
-        });
+        }, { qrbox: { width: 260, height: 260 }, aspectRatio: 1.0 });
       } catch (e) {
         toast('Error al abrir cámara: ' + e.message, 'error');
       }
@@ -1354,7 +1354,7 @@ export function renderBatchGenerateModal() {
           match.confirmed = true;
           toast(`✓ ${decoded.slice(-8)} confirmada`, 'success');
           State.modal = 'batchGenerate'; render();
-        });
+        }, { qrbox: { width: 260, height: 260 }, aspectRatio: 1.0 });
       } catch (e) {
         toast('Error: ' + e.message, 'error');
       }
