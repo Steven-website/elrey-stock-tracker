@@ -806,6 +806,14 @@ function renderPerfilView() {
         </div>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-left:auto;flex-shrink:0;color:var(--muted-2);"><path d="M9 18l6-6-6-6"/></svg>
       </button>
+      <button class="perfil-action-btn" id="btn-reset-app">
+        ${ICON.refresh || ICON.settings}
+        <div>
+          <div style="font-weight:600; font-size:13px;">Forzar actualización</div>
+          <div style="font-size:11px; color:var(--muted);">Borra caché y recarga la app desde cero</div>
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-left:auto;flex-shrink:0;color:var(--muted-2);"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
     </div>
 
     <div style="text-align:center; color:var(--muted-2); font-size:11px; padding:24px 16px 8px; font-family:var(--font-mono);">
@@ -839,6 +847,22 @@ function renderPerfilView() {
         }
         status.style.color = 'var(--danger)';
       });
+  };
+
+  // Reset duro: unregistra SW, borra cachés, recarga
+  wrap.querySelector('#btn-reset-app').onclick = async () => {
+    if (!confirm('¿Limpiar caché y recargar?')) return;
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+    } catch (e) { /* ignorar */ }
+    location.reload();
   };
 
   // Permiso de GPS
