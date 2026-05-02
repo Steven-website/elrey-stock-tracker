@@ -1044,9 +1044,6 @@ export function renderBatchGenerateModal() {
         <button class="btn btn-block btn-primary" id="bg-scan-prod" style="padding:14px;">
           ${ICON.scan} Escanear producto
         </button>
-        <button class="btn btn-block btn-ghost" id="bg-pick-prod" style="margin-top:8px;">
-          ${ICON.list} Seleccionar de la lista
-        </button>
       `}
     `;
     footer = `
