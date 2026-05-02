@@ -198,8 +198,8 @@ export function renderShell() {
     : $(`
       <nav class="tabs">
         <button data-v="scan"   class="${State.view==='scan'     ?'active':''}">${ICON.scan}<span>Escanear</span></button>
-        <button data-v="buscar" class="${State.view==='buscar'   ?'active':''}">${ICON.search}<span>Buscar</span></button>
-        <button data-v="cajas"  class="${State.view==='cajas'    ?'active':''}">${ICON.box}<span>Cajas</span></button>
+        ${canPrint ? '' : `<button data-v="buscar" class="${State.view==='buscar'   ?'active':''}">${ICON.search}<span>Buscar</span></button>`}
+        ${canPrint ? '' : `<button data-v="cajas"  class="${State.view==='cajas'    ?'active':''}">${ICON.box}<span>Cajas</span></button>`}
         <button data-v="mov"    class="${State.view==='mov'      ?'active':''}">${ICON.list}<span>Mov.</span>${pending > 0 ? `<span class="nav-badge">${pending}</span>` : ''}</button>
         ${canPrint ? `<button data-v="imprimir" class="${State.view==='imprimir'?'active':''}">${ICON.qr}<span>Imprimir</span></button>` : ''}
         <button data-v="perfil" class="${State.view==='perfil'   ?'active':''}">${ICON.user}<span>Perfil</span></button>
@@ -263,6 +263,7 @@ export async function handleCodeScanned(code) {
 }
 
 export function renderScanView() {
+  const esOperario = State.user?.rol === 'operario';
   const wrap = $(`<div></div>`);
   wrap.innerHTML = `
     <div class="scan-hero">
@@ -292,12 +293,14 @@ export function renderScanView() {
       </button>
     </div>
 
+    ${esOperario ? '' : `
     <div class="section">
       <div class="section-title">Recientes <small id="rec-count"></small></div>
       <div id="recent-list" class="stack">
         <div class="empty"><div class="loader"></div></div>
       </div>
     </div>
+    `}
   `;
 
   const inp = wrap.querySelector('#manual-code');
@@ -330,15 +333,17 @@ export function renderScanView() {
     render();
   };
 
-  API.listCajas().then(cajas => {
-    const list = wrap.querySelector('#recent-list');
-    wrap.querySelector('#rec-count').textContent = `${cajas.length} cajas activas`;
-    list.innerHTML = '';
-    cajas.slice(0, 5).forEach(c => list.appendChild(cajaListItem(c)));
-  }).catch(e => {
-    wrap.querySelector('#recent-list').innerHTML =
-      `<div class="empty"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
-  });
+  if (!esOperario) {
+    API.listCajas().then(cajas => {
+      const list = wrap.querySelector('#recent-list');
+      wrap.querySelector('#rec-count').textContent = `${cajas.length} cajas activas`;
+      list.innerHTML = '';
+      cajas.slice(0, 5).forEach(c => list.appendChild(cajaListItem(c)));
+    }).catch(e => {
+      const el = wrap.querySelector('#recent-list');
+      if (el) el.innerHTML = `<div class="empty"><h3>Error</h3><p>${escapeHtml(e.message)}</p></div>`;
+    });
+  }
 
   return wrap;
 }
