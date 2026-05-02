@@ -32,17 +32,14 @@
 <!-- Aplicación (módulos ES) -->
 <script type="module" src="./main.js"></script>
 
-<!-- Service Worker desactivado a propósito (causaba caché obsoleto en iOS). -->
-<!-- Igual registramos sw.js una vez para que el kill-switch corra y limpie -->
-<!-- los caches de versiones anteriores en dispositivos que aún lo tienen. -->
+<!-- Service Worker desactivado: ya no se registra. Si el navegador tiene -->
+<!-- un SW viejo registrado, el sw.js actual es un no-op para que no -->
+<!-- intercepte y se desinstale solo con el tiempo. -->
 <script>
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js').then(reg => {
-        // Forzar verificación de actualización del SW (kill-switch)
-        reg.update().catch(() => {});
-      }).catch(() => {});
-    });
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(r => r.unregister().catch(() => {}));
+    }).catch(() => {});
   }
 </script>
 </body>
