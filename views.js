@@ -56,9 +56,6 @@ export function renderLogin() {
       </div>
     ` : ''}
 
-    <button class="btn btn-ghost btn-block" id="btn-config-bottom" style="margin-top:16px;">
-      ${ICON.settings} Configurar backend (GitHub / Supabase)
-    </button>
   `;
 
   const userIn = wrap.querySelector('#login-user');
@@ -85,7 +82,7 @@ export function renderLogin() {
   passIn.onkeydown = e => { if (e.key === 'Enter') submit(); };
   userIn.onkeydown = e => { if (e.key === 'Enter') passIn.focus(); };
 
-  wrap.querySelector('#btn-config-bottom').onclick = () => { State.modal = 'config'; render(); };
+  wrap.querySelector('#btn-config-bottom')?.addEventListener('click', () => { State.modal = 'config'; render(); });
   wrap.querySelector('#link-config')?.addEventListener('click', e => {
     e.preventDefault(); State.modal = 'config'; render();
   });
@@ -1388,17 +1385,6 @@ function _apConfig(el, demo) {
       </div>
       <div class="dash-card">
         <div class="dash-card-header">
-          <div class="dash-card-title">${ICON.database} Base de datos</div>
-        </div>
-        <div style="padding:12px 16px;">
-          <div style="font-size:13px;color:var(--muted);margin-bottom:12px;">
-            ${demo ? 'Modo demo activo — sin conexión a Supabase' : 'Supabase conectado'}
-          </div>
-          <button class="btn btn-block" id="cfg-supabase">${ICON.settings} Configurar conexión</button>
-        </div>
-      </div>
-      <div class="dash-card">
-        <div class="dash-card-header">
           <div class="dash-card-title">${ICON.cloud || ICON.database} Backend GitHub (JSON)</div>
         </div>
         <div style="padding:12px 16px;display:flex;flex-direction:column;gap:8px;">
@@ -1448,7 +1434,7 @@ function _apConfig(el, demo) {
     State.config.stockMinimo = v;
     Storage.set('config', State.config);
   };
-  el.querySelector('#cfg-supabase').onclick = () => { State.modal = 'config'; render(); };
+  el.querySelector('#cfg-supabase')?.addEventListener('click', () => { State.modal = 'config'; render(); });
   el.querySelector('#btn-logout-config').onclick = () => { if (!confirm('¿Cerrar sesión?')) return; logout(); render(); };
 
   // ── Backend GitHub
