@@ -1475,44 +1475,45 @@ export function renderInventarioUbicacionModal() {
     const cont = modal.querySelector('#inv-content');
     if (!inv.posicionId) { cont.innerHTML = ''; return; }
     cont.innerHTML = `<div class="empty" style="padding:14px 0;"><div class="loader"></div></div>`;
+    const esOperario = State.user?.rol === 'operario';
     API.getInventarioUbicacion(inv.posicionId).then(({ posicion, cajas, sueltos }) => {
       cont.innerHTML = `
-        <div class="section-title" style="padding:14px 0 6px;">
-          ${ICON.box} Cajas en esta ubicación <small>${cajas.length}</small>
-        </div>
-        ${cajas.length ? cajas.map(c => `
-          <div class="qty-row">
-            <div class="qty-row-top">
-              <div class="grow">
-                <div class="qty-row-name mono" style="font-size:13px;">${escapeHtml(c.codigo_caja)}</div>
-                <div class="qty-row-sku">${c.unidades_totales} unidades · ${(c.contenido||[]).length} productos</div>
-              </div>
-            </div>
+        ${esOperario ? '' : `
+          <div class="section-title" style="padding:14px 0 6px;">
+            ${ICON.box} Cajas en esta ubicación <small>${cajas.length}</small>
           </div>
-        `).join('') : '<div class="empty" style="padding:10px 0;font-size:12px;color:var(--muted);">Sin cajas</div>'}
-
-        <div class="section-title" style="padding:14px 0 6px;">
-          ${ICON.list || '·'} Productos sueltos <small>${sueltos.length}</small>
-        </div>
-        ${sueltos.length ? sueltos.map(s => `
-          <div class="qty-row">
-            <div class="qty-row-top">
-              <div class="grow">
-                <div class="qty-row-name">${escapeHtml(s.articulo?.descripcion || 'Artículo')}</div>
-                <div class="qty-row-sku mono">${escapeHtml(s.articulo?.sku || '—')} · ${escapeHtml(s.articulo?.codigo_barras || '')}</div>
+          ${cajas.length ? cajas.map(c => `
+            <div class="qty-row">
+              <div class="qty-row-top">
+                <div class="grow">
+                  <div class="qty-row-name mono" style="font-size:13px;">${escapeHtml(c.codigo_caja)}</div>
+                  <div class="qty-row-sku">${c.unidades_totales} unidades · ${(c.contenido||[]).length} productos</div>
+                </div>
               </div>
-              <strong style="color:var(--accent); font-size:18px;">${s.cantidad}</strong>
             </div>
-            ${isAdmin ? `
+          `).join('') : '<div class="empty" style="padding:10px 0;font-size:12px;color:var(--muted);">Sin cajas</div>'}
+
+          <div class="section-title" style="padding:14px 0 6px;">
+            ${ICON.list || '·'} Productos sueltos <small>${sueltos.length}</small>
+          </div>
+          ${sueltos.length ? sueltos.map(s => `
+            <div class="qty-row">
+              <div class="qty-row-top">
+                <div class="grow">
+                  <div class="qty-row-name">${escapeHtml(s.articulo?.descripcion || 'Artículo')}</div>
+                  <div class="qty-row-sku mono">${escapeHtml(s.articulo?.sku || '—')} · ${escapeHtml(s.articulo?.codigo_barras || '')}</div>
+                </div>
+                <strong style="color:var(--accent); font-size:18px;">${s.cantidad}</strong>
+              </div>
               <div style="margin-top:8px; display:flex; gap:6px;">
                 <button class="btn btn-sm btn-success grow" data-add="${s.articulo_id}">${ICON.plus} Agregar</button>
                 <button class="btn btn-sm btn-danger grow" data-sub="${s.articulo_id}">${ICON.minus} Reducir</button>
               </div>
-            ` : ''}
-          </div>
-        `).join('') : '<div class="empty" style="padding:10px 0;font-size:12px;color:var(--muted);">Sin productos sueltos</div>'}
+            </div>
+          `).join('') : '<div class="empty" style="padding:10px 0;font-size:12px;color:var(--muted);">Sin productos sueltos</div>'}
+        `}
 
-        ${isAdmin ? `
+        ${canEdit ? `
           <button class="btn btn-block btn-primary" id="inv-add-suelto" style="margin-top:14px;">
             ${ICON.add} Agregar producto suelto
           </button>
