@@ -466,44 +466,60 @@ main {
 
 /* ---- Scan view -------------------------------------------------------- */
 .scan-hero {
-  background: #0f172a;
-  border-bottom: 1px solid #1e293b;
+  background: linear-gradient(180deg, #0f172a 0%, #1a2030 100%);
+  border-radius: 18px;
+  margin: 14px 14px 8px;
   overflow: hidden;
+  box-shadow: 0 8px 24px -8px rgba(15, 23, 42, 0.4);
 }
 
 .scan-hero-inner {
   position: relative;
-  min-height: 280px;
+  min-height: 300px;
   display: flex;
   align-items: stretch;
   justify-content: stretch;
-  background: #0f172a;
+  background: transparent;
   overflow: hidden;
+  border-radius: 18px;
 }
 .scan-hero-inner > div[id]:not(.scan-overlay) {
   flex: 1;
-  min-height: 280px;
+  min-height: 300px;
 }
 
 .scan-idle {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 32px 20px;
-  gap: 10px;
-  color: #64748b;
+  padding: 36px 20px;
+  gap: 14px;
+  color: #94a3b8;
   text-align: center;
+  width: 100%;
 }
+.scan-idle h3 { color: #f1f5f9; font-weight: 700; }
+.scan-idle p { font-size: 13px; opacity: 0.85; }
 
-.scan-idle svg { width: 44px; height: 44px; color: var(--accent); }
+.scan-idle svg { width: 56px; height: 56px; color: var(--accent); opacity: 0.9; }
+.scan-idle .btn-primary {
+  margin-top: 4px;
+  padding: 12px 28px;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 999px;
+  box-shadow: 0 4px 16px -4px rgba(245, 159, 11, 0.5);
+}
 
 .scan-input-row {
   display: flex;
   gap: 8px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
+  padding: 8px 14px 14px;
+  border-bottom: none;
+  background: transparent;
 }
+.scan-input-row .input { border-radius: 12px; }
+.scan-input-row .btn { border-radius: 12px; }
 
 /* QR reader overrides — aplica a TODOS los contenedores de escáner */
 .scan-hero-inner > div[id$="reader"],
