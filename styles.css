@@ -751,6 +751,21 @@ main {
   flex-shrink: 0;
 }
 
+/* Variantes de color para distintas acciones */
+.action-card-icon-success {
+  background: #22c55e;
+  color: #fff;
+}
+.action-card-icon-info {
+  background: #3b82f6;
+  color: #fff;
+}
+.action-card-info {
+  background: linear-gradient(135deg, rgba(59,130,246,0.12) 0%, rgba(59,130,246,0.04) 100%);
+  border-color: rgba(59,130,246,0.35);
+}
+.action-card-info .action-card-arrow { color: #3b82f6; }
+
 .scan-frame {
   width: 200px; height: 200px;
   position: relative;
