@@ -1145,36 +1145,33 @@ export function renderPrintQRModal() {
 
   modal.querySelector('#print-zebra').onclick = async () => {
     const zpl = buildZPL(code);
-
-    // 1) Intentar con Zebra Browser Print local (http://localhost:9100)
+    const endpoint = State.config.zebraUrl || 'http://localhost:9100';
+    const btn = modal.querySelector('#print-zebra');
+    btn.disabled = true;
+    const old = btn.textContent;
+    btn.textContent = 'Enviando…';
     try {
       const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 1500);
-      const r = await fetch('http://localhost:9100/available', { signal: ctrl.signal });
+      const t = setTimeout(() => ctrl.abort(), 4000);
+      const r = await fetch(endpoint + '/available', { signal: ctrl.signal });
       clearTimeout(t);
-      if (r.ok) {
-        const json = await r.json();
-        const dev = json?.printer?.[0] || json?.devices?.[0];
-        if (dev) {
-          await fetch('http://localhost:9100/write', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ device: dev, data: zpl })
-          });
-          toast('Enviado a Zebra ✓', 'success');
-          return;
-        }
-      }
-    } catch (_) { /* sin Browser Print local */ }
-
-    // 2) Fallback: copiar ZPL al clipboard para pegarlo donde sea
-    try {
-      await navigator.clipboard.writeText(zpl);
-      toast('ZPL copiado — pegalo en el utilitario de tu Zebra', 'info');
-    } catch {
-      // 3) Último fallback: mostrar el ZPL en una ventana
-      const w = window.open('', '_blank');
-      if (w) { w.document.write('<pre>' + escapeHtml(zpl) + '</pre>'); w.document.close(); }
+      if (!r.ok) throw new Error('Browser Print no responde');
+      const json = await r.json();
+      const dev = json?.printer?.[0] || json?.devices?.[0] || json?.printers?.[0];
+      if (!dev) throw new Error('No hay impresora Zebra conectada');
+      const r2 = await fetch(endpoint + '/write', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ device: dev, data: zpl })
+      });
+      if (!r2.ok) throw new Error('Falló el envío a la Zebra');
+      toast('✓ Enviado a Zebra', 'success');
+    } catch (e) {
+      toast('No se pudo imprimir: instalá Zebra Browser Print en la PC del almacén (gratis en zebra.com)', 'error');
+      console.error('[Zebra]', e);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = old;
     }
   };
 
