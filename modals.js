@@ -117,7 +117,21 @@ export function renderBoxModal() {
     <div id="contenido-list">
   `;
 
+  // Operario solo ve los productos que escanea (no la lista completa)
+  const esOperario = State.user?.rol === 'operario';
+  if (esOperario && !isConsumed) {
+    bodyHtml += `
+      <div class="empty" style="padding:20px 8px;">
+        ${ICON.scan}
+        <p style="font-size:12px; color:var(--muted); margin-top:6px;">
+          Escaneá un producto para verlo y operar sobre él.
+        </p>
+      </div>
+    `;
+  }
+
   c.contenido?.forEach(item => {
+    if (esOperario && !isConsumed) return; // saltear para operario en cajas activas
     const art = MOCK.articulos.find(a => a.id === item.articulo_id) || item.articulos || { descripcion: 'Artículo ' + item.articulo_id, sku: '—' };
     const consumida = item.cantidad_inicial - item.cantidad_actual;
     const standardHint = (tipoCaja === 'producto' && art.unidades_por_caja && art.unidades_por_caja !== item.cantidad_inicial)
