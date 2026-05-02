@@ -475,7 +475,7 @@ main {
 
 .scan-hero-inner {
   position: relative;
-  min-height: 150px;
+  min-height: 149px;
   display: flex;
   align-items: stretch;
   justify-content: stretch;
@@ -485,7 +485,7 @@ main {
 }
 .scan-hero-inner > div[id]:not(.scan-overlay) {
   flex: 1;
-  min-height: 150px;
+  min-height: 149px;
 }
 
 .scan-idle {
