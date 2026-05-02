@@ -991,6 +991,233 @@ async function handleProductInBoxScanned(code) {
 
 
 // =====================================================================
+// GENERAR CAJAS EN LOTE — escanea producto + cantidad de cajas + imprime Zebra
+// =====================================================================
+export function renderBatchGenerateModal() {
+  if (!State.cache.batchGen) {
+    State.cache.batchGen = { articulo: null, numCajas: 1, cantPorCaja: 1, posicionId: null, positions: [] };
+  }
+  const bg = State.cache.batchGen;
+
+  const bodyHtml = `
+    <p style="font-size:13px; color:var(--muted); margin-bottom:12px;">
+      Escaneá un producto y decí cuántas cajas iguales querés generar. La app va a crear las cajas y enviar todas las etiquetas a la Zebra.
+    </p>
+
+    <div class="section-title" style="padding:0 0 8px;">1 · Producto</div>
+    <div id="bg-prod-box" style="margin-bottom:14px;">
+      ${bg.articulo ? `
+        <div class="qty-row">
+          <div class="qty-row-top">
+            <div class="grow">
+              <div class="qty-row-name">${escapeHtml(bg.articulo.descripcion)}</div>
+              <div class="qty-row-sku mono">${escapeHtml(bg.articulo.sku || '—')} · ${escapeHtml(bg.articulo.codigo_barras || '')}</div>
+            </div>
+            <button class="btn btn-sm" id="bg-rescan">Cambiar</button>
+          </div>
+        </div>
+      ` : `
+        <button class="btn btn-block btn-primary" id="bg-scan-prod">${ICON.scan} Escanear producto</button>
+        <button class="btn btn-block btn-ghost" id="bg-pick-prod" style="margin-top:6px;">${ICON.list} Seleccionar manual</button>
+      `}
+    </div>
+
+    <div class="section-title" style="padding:0 0 8px;">2 · Cantidades</div>
+    <label class="label">¿Cuántas cajas?</label>
+    <input type="number" inputmode="numeric" pattern="[0-9]*" id="bg-num" class="input" min="1" max="200" value="${bg.numCajas}" style="font-size:24px; text-align:center; font-weight:700;" />
+    <label class="label" style="margin-top:12px;">Unidades por caja</label>
+    <input type="number" inputmode="numeric" pattern="[0-9]*" id="bg-cant" class="input" min="1" value="${bg.cantPorCaja}" style="font-size:18px; text-align:center; font-weight:600;" />
+
+    <div class="section-title" style="padding:14px 0 8px;">3 · Ubicación</div>
+    <div id="bg-pos-list" class="lote-pos-grid">
+      <div class="empty" style="padding:18px 0;"><div class="loader"></div></div>
+    </div>
+  `;
+
+  const footerHtml = `
+    <button class="btn grow" id="bg-cancel">Cancelar</button>
+    <button class="btn btn-primary grow" id="bg-go">${ICON.qr} Generar e imprimir</button>
+  `;
+  const modal = modalShell('Generar cajas en lote', bodyHtml, footerHtml);
+
+  const numIn  = modal.querySelector('#bg-num');
+  const cantIn = modal.querySelector('#bg-cant');
+  numIn.oninput  = e => { bg.numCajas    = Math.max(1, parseInt(e.target.value) || 1); };
+  cantIn.oninput = e => { bg.cantPorCaja = Math.max(1, parseInt(e.target.value) || 1); };
+
+  modal.querySelector('#bg-scan-prod')?.addEventListener('click', () => {
+    State.cache.scanProductReturnTo = 'batchGenerate';
+    State.modal = 'scanProductForBatch';
+    render();
+  });
+  modal.querySelector('#bg-rescan')?.addEventListener('click', () => {
+    bg.articulo = null;
+    State.modal = 'batchGenerate';
+    render();
+  });
+  modal.querySelector('#bg-pick-prod')?.addEventListener('click', async () => {
+    const arts = await API.listArticulos();
+    const txt = prompt('SKU o código de barras:\n\n' +
+      arts.slice(0, 12).map(a => `${a.sku} · ${a.descripcion}`).join('\n'));
+    if (!txt) return;
+    const found = arts.find(a =>
+      a.sku === txt.trim() || a.codigo_barras === txt.trim() ||
+      a.descripcion.toLowerCase().includes(txt.trim().toLowerCase())
+    );
+    if (!found) { toast('No encontré ese producto', 'error'); return; }
+    bg.articulo = found;
+    if (found.unidades_por_caja) bg.cantPorCaja = found.unidades_por_caja;
+    State.modal = 'batchGenerate'; render();
+  });
+
+  // Cargar ubicaciones
+  API.listPosiciones().then(positions => {
+    const list = modal.querySelector('#bg-pos-list');
+    if (!positions.length) {
+      list.innerHTML = `<div class="empty"><p>Sin ubicaciones</p></div>`; return;
+    }
+    list.innerHTML = positions.map(p => `
+      <button class="lote-pos-card ${bg.posicionId === p.id ? 'selected' : ''}" data-pid="${p.id}">
+        <div class="lote-pos-icon">${ICON.pin}</div>
+        <div class="lote-pos-text">
+          <div class="lote-pos-name">${escapeHtml(p.ubicacion || '—')}</div>
+          <div class="lote-pos-desc mono">${escapeHtml(p.descripcion || '')}</div>
+        </div>
+      </button>
+    `).join('');
+    list.querySelectorAll('.lote-pos-card').forEach(btn => {
+      btn.onclick = () => {
+        list.querySelectorAll('.lote-pos-card').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        bg.posicionId = parseInt(btn.dataset.pid);
+      };
+    });
+  });
+
+  modal.querySelector('#bg-cancel').onclick = () => {
+    State.cache.batchGen = null;
+    closeModal();
+  };
+
+  modal.querySelector('#bg-go').onclick = async () => {
+    if (!bg.articulo) { toast('Escaneá o seleccioná un producto', 'error'); return; }
+    if (!bg.posicionId) { toast('Elegí una ubicación', 'error'); return; }
+    if (bg.numCajas < 1) { toast('Cantidad de cajas inválida', 'error'); return; }
+    if (!confirm(`¿Generar ${bg.numCajas} caja${bg.numCajas !== 1 ? 's' : ''} con ${bg.cantPorCaja} ${bg.articulo.descripcion}?\n\nSe imprimirán todas en la Zebra.`)) return;
+
+    const btn = modal.querySelector('#bg-go');
+    btn.disabled = true;
+
+    const codes = [];
+    for (let i = 0; i < bg.numCajas; i++) {
+      btn.textContent = `Creando caja ${i+1}/${bg.numCajas}…`;
+      const codigo = generateBoxCode();
+      try {
+        await API.createCaja({
+          codigo_caja: codigo,
+          tipo_caja: 'producto',
+          posicion_id: bg.posicionId,
+          items: [{ articulo_id: bg.articulo.id, cantidad: bg.cantPorCaja }],
+          motivo: 'Generación en lote'
+        });
+        codes.push(codigo);
+      } catch (e) {
+        toast(`Error en caja ${i+1}: ${e.message}`, 'error');
+      }
+    }
+
+    // Imprimir cada una en Zebra (best-effort)
+    btn.textContent = 'Enviando a Zebra…';
+    const endpoint = State.config.zebraUrl || 'http://localhost:9100';
+    let zebraOk = 0, zebraFail = 0;
+    let device = null;
+    try {
+      const r = await fetch(endpoint + '/available');
+      const json = await r.json();
+      device = json?.printer?.[0] || json?.devices?.[0] || json?.printers?.[0];
+    } catch (_) { device = null; }
+
+    for (const code of codes) {
+      const zpl = [
+        '^XA','^PW400','^LL240','^LH0,0',
+        '^FO80,20^BQN,2,5^FDLA,' + code + '^FS',
+        '^FO20,200^A0N,22,22^FB360,1,0,C,0^FD' + code + '^FS',
+        '^XZ'
+      ].join('\n');
+      if (!device) { zebraFail++; continue; }
+      try {
+        await fetch(endpoint + '/write', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device, data: zpl })
+        });
+        zebraOk++;
+      } catch (_) { zebraFail++; }
+    }
+
+    if (zebraOk === codes.length) {
+      toast(`✓ ${codes.length} cajas creadas e impresas`, 'success');
+    } else if (zebraOk > 0) {
+      toast(`${codes.length} cajas creadas · ${zebraOk} impresas, ${zebraFail} fallaron`, 'warn');
+    } else {
+      toast(`${codes.length} cajas creadas. Zebra no respondió — los códigos quedaron guardados.`, 'warn');
+    }
+
+    State.cache.batchGen = null;
+    closeModal();
+  };
+
+  return modal;
+}
+
+// Modal espejo de scanProduct pero que vuelve a batchGenerate al leer
+export function renderScanProductForBatchModal() {
+  const bodyHtml = `
+    <p style="font-size:13px; color:var(--muted); margin-bottom:12px;">
+      Apuntá la cámara al código de barras del producto.
+    </p>
+    <div class="scan-hero" style="margin:0;">
+      <div class="scan-hero-inner">
+        <div id="bg-prod-reader"></div>
+        <div class="scan-overlay">
+          <div class="scan-frame"><span></span><span></span><div class="scan-line"></div></div>
+        </div>
+      </div>
+    </div>
+    <label class="label" style="margin-top:14px;">O ingresá el código a mano</label>
+    <div style="display:flex; gap:8px;">
+      <input class="input mono" id="bg-prod-manual" placeholder="SKU o código de barras" />
+      <button class="btn" id="bg-prod-manual-btn">${ICON.check}</button>
+    </div>
+  `;
+  const footerHtml = `<button class="btn btn-block" id="bg-prod-cancel">Volver</button>`;
+  const modal = modalShell('Escanear producto', bodyHtml, footerHtml);
+
+  const handle = async (code) => {
+    stopScanner();
+    const art = await API.findArticuloByCode(code);
+    if (!art) { toast(`No encontré "${code}"`, 'error'); State.modal = 'batchGenerate'; render(); return; }
+    if (!State.cache.batchGen) State.cache.batchGen = { articulo: null, numCajas: 1, cantPorCaja: 1, posicionId: null };
+    State.cache.batchGen.articulo = art;
+    if (art.unidades_por_caja) State.cache.batchGen.cantPorCaja = art.unidades_por_caja;
+    State.modal = 'batchGenerate';
+    render();
+  };
+  setTimeout(() => startScanner('bg-prod-reader', handle, { qrbox: { width: 240, height: 160 } }), 100);
+
+  modal.querySelector('#bg-prod-manual-btn').onclick = () => {
+    const v = modal.querySelector('#bg-prod-manual').value.trim();
+    if (v) handle(v);
+  };
+  modal.querySelector('#bg-prod-manual').onkeydown = e => {
+    if (e.key === 'Enter') { const v = e.target.value.trim(); if (v) handle(v); }
+  };
+  modal.querySelector('#bg-prod-cancel').onclick = () => { stopScanner(); State.modal = 'batchGenerate'; render(); };
+
+  return modal;
+}
+
+// =====================================================================
 // MOVER LOTE — modal de confirmación de traslado masivo
 // =====================================================================
 export function renderMoverLoteModal() {

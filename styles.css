@@ -765,6 +765,15 @@ main {
   border-color: rgba(59,130,246,0.35);
 }
 .action-card-info .action-card-arrow { color: #3b82f6; }
+.action-card-icon-purple {
+  background: #a855f7;
+  color: #fff;
+}
+.action-card-purple {
+  background: linear-gradient(135deg, rgba(168,85,247,0.12) 0%, rgba(168,85,247,0.04) 100%);
+  border-color: rgba(168,85,247,0.35);
+}
+.action-card-purple .action-card-arrow { color: #a855f7; }
 
 .scan-frame {
   width: 200px; height: 200px;
