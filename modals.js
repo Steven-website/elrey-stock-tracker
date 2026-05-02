@@ -5,7 +5,7 @@
 import { State, Storage } from './state.js';
 import { API, initSupabase } from './api.js';
 import { MOCK } from './mock.js';
-import { ICON, $, escapeHtml, fmtDate, fmtDateTime, toast, generateBoxCode, feedback } from './utils.js';
+import { ICON, $, escapeHtml, fmtDate, fmtDateTime, toast, generateBoxCode, feedback, hashPassword } from './utils.js';
 import { isValidUsername, isValidPassword, isAdminTienda } from './auth.js';
 import { startScanner, stopScanner } from './scanner.js';
 import { render } from './main.js';
@@ -1426,6 +1426,67 @@ export function renderScanProductForBatchModal() {
     if (e.key === 'Enter') { const v = e.target.value.trim(); if (v) handle(v); }
   };
   modal.querySelector('#bg-prod-cancel').onclick = () => { stopScanner(); State.modal = 'batchGenerate'; render(); };
+
+  return modal;
+}
+
+// =====================================================================
+// CAMBIAR CONTRASEÑA — modal compartido (libre y forzado por expiracion)
+// =====================================================================
+export function renderCambiarPasswordModal() {
+  const forzado = !!State.cache.passwordExpired;
+  const bodyHtml = `
+    ${forzado ? `
+      <div class="banner banner-warn" style="border:1px solid; padding:12px; margin-bottom:14px;">
+        ${ICON.warn}
+        <span style="font-size:13px;">Tu contraseña tiene más de 6 meses. Tenés que cambiarla para continuar.</span>
+      </div>
+    ` : ''}
+    <p style="font-size:13px; color:var(--muted); margin-bottom:12px;">
+      Mínimo 6 caracteres. Vas a usarla la próxima vez que entres.
+    </p>
+    <label class="label">Contraseña actual</label>
+    <input type="password" id="pw-old" class="input" autocomplete="current-password" />
+    <label class="label" style="margin-top:12px;">Contraseña nueva</label>
+    <input type="password" id="pw-new" class="input" autocomplete="new-password" />
+    <label class="label" style="margin-top:12px;">Repetir nueva</label>
+    <input type="password" id="pw-new2" class="input" autocomplete="new-password" />
+    <div id="pw-error" style="color:var(--danger); font-size:13px; min-height:18px; margin-top:8px;"></div>
+  `;
+  const footerHtml = forzado
+    ? `<button class="btn btn-primary btn-block" id="pw-save">Guardar nueva contraseña</button>`
+    : `<button class="btn grow" id="pw-cancel">Cancelar</button>
+       <button class="btn btn-primary grow" id="pw-save">Guardar</button>`;
+  const modal = modalShell('Cambiar contraseña', bodyHtml, footerHtml);
+
+  modal.querySelector('#pw-cancel')?.addEventListener('click', () => closeModal());
+
+  modal.querySelector('#pw-save').onclick = async () => {
+    const errEl = modal.querySelector('#pw-error');
+    errEl.textContent = '';
+    const oldP = modal.querySelector('#pw-old').value;
+    const n1   = modal.querySelector('#pw-new').value;
+    const n2   = modal.querySelector('#pw-new2').value;
+    if (!oldP || !n1 || !n2) { errEl.textContent = 'Completá los tres campos.'; return; }
+    if (n1.length < 6) { errEl.textContent = 'La nueva debe tener al menos 6 caracteres.'; return; }
+    if (n1 !== n2) { errEl.textContent = 'Las dos copias no coinciden.'; return; }
+    if (n1 === oldP) { errEl.textContent = 'La nueva no puede ser igual a la actual.'; return; }
+    // Validar la actual
+    const curHash = await hashPassword(oldP);
+    if (curHash !== State.user.password_hash) { errEl.textContent = 'La contraseña actual no coincide.'; return; }
+    try {
+      const updated = await API.resetUserPassword(State.user.id, n1);
+      State.user.password_hash = updated.password_hash;
+      State.user.password_set_at = updated.password_set_at;
+      Storage.set('user', State.user);
+      logEvent('pwd_reset', { username: State.user.username });
+      State.cache.passwordExpired = false;
+      toast('Contraseña actualizada', 'success');
+      closeModal();
+    } catch (e) {
+      errEl.textContent = e.message;
+    }
+  };
 
   return modal;
 }
