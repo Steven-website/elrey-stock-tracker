@@ -48,7 +48,7 @@ async function ensureLib() {
 }
 
 // ── Backend 1: BarcodeDetector nativo (iOS 17+, Chrome) ──────────────
-async function startNative(elementId, onScan) {
+async function startNative(elementId, onScan, options = {}) {
   const container = document.getElementById(elementId);
   if (!container) throw new Error('Contenedor no encontrado');
 
@@ -77,8 +77,9 @@ async function startNative(elementId, onScan) {
   video.srcObject = stream;
   await video.play();
 
-  _native = { stream, video, raf: 0, stop: false };
+  _native = { stream, video, raf: 0, stop: false, lastCode: '', lastAt: 0 };
   _onScanCb = onScan;
+  const continuous = !!options.continuous;
 
   const tick = async () => {
     if (!_native || _native.stop) return;
@@ -86,11 +87,21 @@ async function startNative(elementId, onScan) {
       const codes = await detector.detect(video);
       if (codes && codes.length) {
         const decoded = codes[0].rawValue;
-        feedback('ok');
-        const cb = _onScanCb;
-        stopScanner();
-        if (cb) cb(decoded);
-        return;
+        const now = Date.now();
+        // Evitar disparar el mismo código repetidamente (debounce 1.2s por código)
+        if (!continuous || decoded !== _native.lastCode || (now - _native.lastAt) > 1200) {
+          _native.lastCode = decoded;
+          _native.lastAt = now;
+          feedback('ok');
+          if (continuous) {
+            if (_onScanCb) _onScanCb(decoded); // seguir escaneando
+          } else {
+            const cb = _onScanCb;
+            stopScanner();
+            if (cb) cb(decoded);
+            return;
+          }
+        }
       }
     } catch (_) { /* ignorar errores transitorios */ }
     _native.raf = requestAnimationFrame(tick);
@@ -102,6 +113,8 @@ async function startNative(elementId, onScan) {
 async function startFallback(elementId, onScan, options) {
   await ensureLib();
   _onScanCb = onScan;
+  const continuous = !!options.continuous;
+  let lastCode = '', lastAt = 0;
   _scanner = new window.Html5Qrcode(elementId, { verbose: false });
   await _scanner.start(
     { facingMode: 'environment' },
@@ -111,10 +124,17 @@ async function startFallback(elementId, onScan, options) {
       aspectRatio: options.aspectRatio || 1.0
     },
     (decoded) => {
+      const now = Date.now();
+      if (continuous && decoded === lastCode && (now - lastAt) <= 1200) return;
+      lastCode = decoded; lastAt = now;
       feedback('ok');
-      const cb = _onScanCb;
-      stopScanner();
-      if (cb) cb(decoded);
+      if (continuous) {
+        if (_onScanCb) _onScanCb(decoded);
+      } else {
+        const cb = _onScanCb;
+        stopScanner();
+        if (cb) cb(decoded);
+      }
     },
     () => {}
   );
@@ -131,7 +151,7 @@ export async function startScanner(elementId, onScan, options = {}) {
   // Preferir BarcodeDetector nativo si existe (sin dependencia de internet)
   if ('BarcodeDetector' in window) {
     try {
-      await startNative(elementId, onScan);
+      await startNative(elementId, onScan, options);
       return;
     } catch (e) {
       _native = null;
