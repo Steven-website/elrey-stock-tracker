@@ -213,53 +213,21 @@ function renderQtyModal(tipo) {
   const max = isReduce ? item.cantidad_actual : item.cantidad_inicial - item.cantidad_actual;
 
   const bodyHtml = `
-    <div class="box-header">
-      <div class="qty-row-name" style="margin-bottom:4px;">${escapeHtml(art.descripcion)}</div>
-      <div class="meta mono" style="font-size:11px; color:var(--muted); display:flex; gap:10px;">
-        <span>Cod. Rey: <strong>${escapeHtml(art.sku || '—')}</strong></span>
-        <span>${escapeHtml(c.codigo_caja)}</span>
+    <div class="box-header" style="display:flex; gap:12px; align-items:center;">
+      ${art.imagen_url ? `<img src="${escapeHtml(art.imagen_url)}" alt="" style="width:64px; height:64px; object-fit:cover; border-radius:8px; flex-shrink:0;" onerror="this.style.display='none'" />` : ''}
+      <div style="min-width:0; flex:1;">
+        <div class="qty-row-name" style="margin-bottom:4px;">${escapeHtml(art.descripcion)}</div>
+        <div class="meta mono" style="font-size:11px; color:var(--muted);">
+          ${escapeHtml(art.sku || '—')} · ${isReduce ? 'Disponible' : 'Capacidad libre'}: <strong style="color:var(--accent);">${isReduce ? item.cantidad_actual : max}</strong>
+        </div>
       </div>
-      <div style="margin-top:10px; font-family:var(--font-mono);">
-        ${isReduce ? `Disponible: <strong style="color:var(--accent);">${item.cantidad_actual}</strong>` : `Capacidad libre: <strong style="color:var(--accent);">${max}</strong>`}
-      </div>
     </div>
 
-    <label class="label">Cantidad a ${tipo}</label>
-    <div class="qty-shortcuts">
-      ${[1,5,10,25].filter(n => n <= max).map(n =>
-        `<button class="qty-shortcut" data-qty="${n}">${n}</button>`
-      ).join('')}
-      <button class="qty-shortcut qty-shortcut-all" data-qty="${max}">Todo (${max})</button>
-    </div>
-    <div class="counter" style="margin-top:8px;">
-      <button id="qty-minus">−</button>
-      <input type="number" id="qty-input" value="1" min="1" max="${max}" />
-      <button id="qty-plus">+</button>
-    </div>
-
-    <label class="label" style="margin-top:16px;">Motivo</label>
-    <select class="select" id="motivo">
-      ${isReduce ? `
-        <option value="Venta">Venta</option>
-        <option value="Traslado a exhibición">Traslado a exhibición</option>
-        <option value="Merma">Merma</option>
-        <option value="Devolución a proveedor">Devolución a proveedor</option>
-        <option value="Otro">Otro</option>
-      ` : `
-        <option value="Reposición desde proveedor">Reposición desde proveedor</option>
-        <option value="Devolución de cliente">Devolución de cliente</option>
-        <option value="Ajuste de inventario">Ajuste de inventario</option>
-        <option value="Otro">Otro</option>
-      `}
-    </select>
-
-    <label class="label" style="margin-top:16px;">Nota rápida (opcional)</label>
-    <div class="note-chips" id="note-chips">
-      ${(isReduce
-        ? ['Con factura', 'Sin factura', 'Devolución cliente', 'Daño visible', 'Conteo corregido']
-        : ['Factura incluida', 'Mercadería revisada', 'Conteo corregido', 'Proveedor directo']
-      ).map(n => `<button class="note-chip" data-note="${n}">${n}</button>`).join('')}
-    </div>
+    <label class="label" style="margin-top:12px;">Cantidad a ${tipo}</label>
+    <input type="number" inputmode="numeric" pattern="[0-9]*"
+      id="qty-input" value="1" min="1" max="${max}"
+      class="input"
+      style="font-size:32px; text-align:center; font-weight:700; padding:14px;" />
   `;
 
   const footerHtml = `
@@ -270,41 +238,16 @@ function renderQtyModal(tipo) {
   const modal = modalShell(verb + ' unidades', bodyHtml, footerHtml);
 
   const input = modal.querySelector('#qty-input');
-
-  modal.querySelectorAll('.qty-shortcut').forEach(btn => {
-    btn.onclick = () => {
-      const qty = Math.min(max, parseInt(btn.dataset.qty));
-      input.value = qty;
-      modal.querySelectorAll('.qty-shortcut').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-    };
-  });
-
-  modal.querySelector('#qty-minus').onclick = () => {
-    input.value = Math.max(1, parseInt(input.value || '1') - 1);
-    modal.querySelectorAll('.qty-shortcut').forEach(b => b.classList.remove('active'));
-  };
-  modal.querySelector('#qty-plus').onclick = () => {
-    input.value = Math.min(max, parseInt(input.value || '1') + 1);
-    modal.querySelectorAll('.qty-shortcut').forEach(b => b.classList.remove('active'));
-  };
-  modal.querySelectorAll('.note-chip').forEach(btn => {
-    btn.onclick = () => {
-      const active = btn.classList.contains('active');
-      modal.querySelectorAll('.note-chip').forEach(b => b.classList.remove('active'));
-      if (!active) btn.classList.add('active');
-    };
-  });
+  setTimeout(() => { input.focus(); input.select(); }, 80);
 
   modal.querySelector('#cancel-act').onclick = () => { State.modal = 'box'; render(); };
   modal.querySelector('#confirm-act').onclick = async () => {
     const cantidad = Math.max(1, Math.min(max, parseInt(input.value || '1')));
-    const motivo = modal.querySelector('#motivo').value;
-    const notas = modal.querySelector('.note-chip.active')?.dataset.note || '';
+    const motivo = isReduce ? 'Venta' : 'Reposición desde proveedor';
     try {
       const result = await API.createMovimiento({
         tipo, caja_id: c.id, articulo_id: artId,
-        cantidad, motivo, notas, usuario_id: State.user.id
+        cantidad, motivo, notas: '', usuario_id: State.user.id
       });
       if (result?.pending) {
         // Sin conexión — actualizar estado local para que la UI refleje el cambio
