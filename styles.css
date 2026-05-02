@@ -473,10 +473,16 @@ main {
 
 .scan-hero-inner {
   position: relative;
-  min-height: 220px;
+  min-height: 280px;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: stretch;
+  background: #0f172a;
+  overflow: hidden;
+}
+.scan-hero-inner > div[id]:not(.scan-overlay) {
+  flex: 1;
+  min-height: 280px;
 }
 
 .scan-idle {
@@ -499,7 +505,29 @@ main {
   background: var(--surface);
 }
 
-/* QR reader overrides */
+/* QR reader overrides — aplica a TODOS los contenedores de escáner */
+.scan-hero-inner > div[id$="reader"],
+.scan-hero-inner > div[id$="-reader"],
+.scan-hero-inner > div[id$="-scanner"],
+.scan-hero-inner > div[id$="-host"],
+.scan-hero-inner > div[id$="-div"] {
+  width: 100% !important;
+  height: 100% !important;
+  border: none !important;
+}
+.scan-hero-inner video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+}
+[id^="qr-reader"] [id$="__scan_region"],
+.scan-hero-inner [id$="__scan_region"] {
+  border: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+.scan-hero-inner [id$="__dashboard"] { display: none !important; }
 #qr-reader { width: 100% !important; border: none !important; }
 #qr-reader video { width: 100% !important; object-fit: cover; }
 #qr-reader__scan_region { border: none !important; background: transparent !important; }
