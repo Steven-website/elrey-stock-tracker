@@ -20,8 +20,45 @@
 </head>
 <body>
 
-<div id="app"></div>
+<div id="app">
+  <div style="padding:40px 20px; text-align:center; font-family:-apple-system,sans-serif;">
+    <h2 style="color:#f59f0b; margin-bottom:8px;">Cargando Inventario El Rey…</h2>
+    <p style="color:#666; font-size:13px;">Si este mensaje queda fijo más de 10 segundos:</p>
+    <ol style="text-align:left; color:#666; font-size:12px; max-width:320px; margin:12px auto;">
+      <li>Asegurate de tener internet</li>
+      <li>Refrescá la página (pull-to-refresh)</li>
+      <li>Si seguís trabado, abrí en una pestaña privada</li>
+    </ol>
+    <p style="color:#aaa; font-size:11px; margin-top:24px;">build 2026-05-02 · v32</p>
+  </div>
+</div>
 <div id="toast-container"></div>
+
+<noscript>
+  <div style="padding:40px 20px; text-align:center; font-family:sans-serif; color:#dc2626;">
+    <h2>JavaScript desactivado</h2>
+    <p>Esta app necesita JavaScript habilitado para funcionar.</p>
+  </div>
+</noscript>
+
+<!-- Listener global de errores: si algún script revienta, mostralo -->
+<script>
+  window.addEventListener('error', e => {
+    var app = document.getElementById('app');
+    if (app && app.children.length <= 1) {
+      app.innerHTML = '<div style="padding:40px 20px;text-align:center;color:#dc2626;font-family:-apple-system,sans-serif;">' +
+        '<h2>Error al cargar la app</h2>' +
+        '<p style="font-family:monospace;font-size:12px;background:#fee;padding:12px;text-align:left;overflow:auto;">' +
+        (e.message || 'Error desconocido') + '<br>' +
+        (e.filename || '') + ':' + (e.lineno || '') + '</p>' +
+        '<p style="color:#666;font-size:11px;">Mandá screenshot de este error.</p>' +
+        '</div>';
+    }
+  }, true);
+  window.addEventListener('unhandledrejection', e => {
+    console.error('Unhandled:', e.reason);
+  });
+</script>
 
 <!-- Librerías locales (vendorizadas) y CDN -->
 <script src="./html5-qrcode.min.js"></script>
