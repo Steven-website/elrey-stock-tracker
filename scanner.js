@@ -52,10 +52,16 @@ async function startNative(elementId, onScan) {
   const container = document.getElementById(elementId);
   if (!container) throw new Error('Contenedor no encontrado');
 
-  const detector = new window.BarcodeDetector({
-    formats: ['qr_code', 'ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e']
-  });
+  // Sin lista de formatos: iOS/Chrome usan todos los que soportan nativamente.
+  // Pasar formatos no soportados tiraría una excepción acá.
+  let detector;
+  try {
+    detector = new window.BarcodeDetector();
+  } catch (e) {
+    throw new Error('BarcodeDetector no soportado: ' + (e?.message || e));
+  }
 
+  // getUserMedia DEBE invocarse en este tick (mismo gesture context iOS Safari)
   const stream = await navigator.mediaDevices.getUserMedia({
     video: { facingMode: { ideal: 'environment' } }, audio: false
   });

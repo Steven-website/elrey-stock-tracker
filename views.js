@@ -790,6 +790,22 @@ function renderPerfilView() {
         </div>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-left:auto;flex-shrink:0;color:var(--muted-2);"><path d="M9 18l6-6-6-6"/></svg>
       </button>
+      <button class="perfil-action-btn" id="btn-perm-cam">
+        ${ICON.scan}
+        <div>
+          <div style="font-weight:600; font-size:13px;">Permitir cámara</div>
+          <div style="font-size:11px; color:var(--muted);" id="perm-cam-status">Necesario para escanear códigos QR</div>
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-left:auto;flex-shrink:0;color:var(--muted-2);"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+      <button class="perfil-action-btn" id="btn-perm-gps">
+        ${ICON.pin}
+        <div>
+          <div style="font-weight:600; font-size:13px;">Permitir ubicación (GPS)</div>
+          <div style="font-size:11px; color:var(--muted);" id="perm-gps-status">Necesario para validar la tienda</div>
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-left:auto;flex-shrink:0;color:var(--muted-2);"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
     </div>
 
     <div style="text-align:center; color:var(--muted-2); font-size:11px; padding:24px 16px 8px; font-family:var(--font-mono);">
@@ -798,6 +814,56 @@ function renderPerfilView() {
   `;
 
   wrap.querySelector('#btn-cfg-pwd').onclick = () => { State.modal = 'cambiar-password'; render(); };
+
+  // Permiso de cámara — debe llamarse SINCRÓNICO desde el tap (gesture iOS)
+  wrap.querySelector('#btn-perm-cam').onclick = () => {
+    const status = wrap.querySelector('#perm-cam-status');
+    if (!navigator.mediaDevices?.getUserMedia) {
+      status.textContent = 'Tu navegador no soporta cámara'; status.style.color = 'var(--danger)'; return;
+    }
+    status.textContent = 'Solicitando permiso…'; status.style.color = 'var(--muted)';
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+      .then(stream => {
+        stream.getTracks().forEach(t => t.stop());
+        status.textContent = '✓ Cámara permitida'; status.style.color = 'var(--success, #4ade80)';
+        toast('Cámara permitida — ya podés escanear', 'success');
+      })
+      .catch(e => {
+        const msg = String(e?.message || e || '');
+        if (/notallowed|denied|permission/i.test(msg)) {
+          status.textContent = 'Denegado · Ajustes › Safari › Cámara';
+        } else if (/notfound/i.test(msg)) {
+          status.textContent = 'No se detectó cámara';
+        } else {
+          status.textContent = 'Error: ' + msg.slice(0, 60);
+        }
+        status.style.color = 'var(--danger)';
+      });
+  };
+
+  // Permiso de GPS
+  wrap.querySelector('#btn-perm-gps').onclick = () => {
+    const status = wrap.querySelector('#perm-gps-status');
+    if (!navigator.geolocation) {
+      status.textContent = 'Tu navegador no soporta GPS'; status.style.color = 'var(--danger)'; return;
+    }
+    status.textContent = 'Solicitando permiso…'; status.style.color = 'var(--muted)';
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        status.textContent = `✓ Ubicación permitida (±${Math.round(pos.coords.accuracy)} m)`;
+        status.style.color = 'var(--success, #4ade80)';
+        toast('Ubicación permitida', 'success');
+      },
+      err => {
+        if (err.code === 1) status.textContent = 'Denegado · Ajustes › Safari › Ubicación';
+        else if (err.code === 2) status.textContent = 'GPS no disponible';
+        else if (err.code === 3) status.textContent = 'Tiempo agotado';
+        else status.textContent = 'Error: ' + (err.message || '').slice(0, 60);
+        status.style.color = 'var(--danger)';
+      },
+      { timeout: 10000, enableHighAccuracy: false, maximumAge: 60000 }
+    );
+  };
 
   // Resolver nombre de tienda async
   API.listTiendas().then(tiendas => {
