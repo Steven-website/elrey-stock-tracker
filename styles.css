@@ -609,6 +609,26 @@ main {
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
 }
+.box-header .box-code {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--accent);
+  word-break: break-all;
+}
+.box-loc {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.box-loc svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
 
 /* ---- Login brand ------------------------------------------------------ */
 .brand-large {
