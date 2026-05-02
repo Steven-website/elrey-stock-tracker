@@ -482,6 +482,7 @@ export function renderConfigModal() {
 export function renderCreateBoxModal() {
   if (!State.cache.newBox) {
     State.cache.newBox = {
+      step: 1,
       codigo: generateBoxCode(),
       tipo_caja: 'producto',
       posicion_id: null,
@@ -490,186 +491,284 @@ export function renderCreateBoxModal() {
     };
   }
   const nb = State.cache.newBox;
-  const isProducto = nb.tipo_caja === 'producto';
+  if (!nb.step) nb.step = 1;
+  const TOTAL_STEPS = 4;
 
-  const bodyHtml = `
-    <div class="section-title" style="padding:0 0 8px;">Tipo de caja</div>
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:18px;">
-      <button class="btn btn-sm ${isProducto ? 'btn-primary' : ''}" data-tipo="producto" style="flex-direction:column; padding:12px; min-height:auto; gap:4px; text-align:center;">
-        ${ICON.box}
-        <div style="font-size:12px; font-weight:600;">Caja del producto</div>
-        <div style="font-size:10px; opacity:0.7; font-weight:400;">capacidad estándar</div>
-      </button>
-      <button class="btn btn-sm ${!isProducto ? 'btn-primary' : ''}" data-tipo="reutilizable" style="flex-direction:column; padding:12px; min-height:auto; gap:4px; text-align:center;">
-        ${ICON.box}
-        <div style="font-size:12px; font-weight:600;">Caja reutilizable</div>
-        <div style="font-size:10px; opacity:0.7; font-weight:400;">caja de bodega</div>
-      </button>
-    </div>
-
-    <div class="section-title" style="padding:0 0 8px;">1 · Código de la caja</div>
-    <div class="box-header" style="margin-bottom:16px;">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-        <div class="box-code" id="new-codigo">${escapeHtml(nb.codigo)}</div>
-        <button class="btn btn-sm btn-ghost" id="btn-regen" title="Generar otro">${ICON.refresh}</button>
-      </div>
-      <div style="font-size:11px; color:var(--muted); margin-top:6px; font-family:var(--font-mono);">
-        // este código se imprimirá como QR para pegar en la caja
-      </div>
-    </div>
-
-    <div class="section-title" style="padding:0 0 8px;">
-      2 · Contenido de la caja
-      <small id="items-count">${nb.items.length} producto${nb.items.length===1?'':'s'}</small>
-    </div>
-
-    ${isProducto ? `
-      <div class="banner banner-info" style="border:1px solid; margin-bottom:8px; font-size:11px; padding:8px 12px;">
-        ${ICON.info}
-        <span>Caja del producto: la app sugiere la cantidad estándar, pero podés editarla si el proveedor trajo menos.</span>
-      </div>
-    ` : ''}
-
-    <div id="items-list" style="margin-bottom:8px;">
-      ${nb.items.length === 0 ? `
-        <div class="empty" style="padding:20px; border:1px dashed var(--border-2);">
-          ${ICON.box}
-          <p style="margin-top:8px;">Todavía no hay productos en la caja</p>
-        </div>
-      ` : nb.items.map((it, idx) => `
-        <div class="qty-row">
-          <div class="qty-row-top">
-            <div class="grow">
-              <div class="qty-row-name">${escapeHtml(it.articulo.descripcion)}</div>
-              <div class="qty-row-sku">
-                ${escapeHtml(it.articulo.sku || '—')}
-                ${it.articulo.unidades_por_caja ? ` · estándar: ${it.articulo.unidades_por_caja}` : ''}
-              </div>
-            </div>
-            <button class="btn btn-sm btn-danger" data-rm="${idx}" style="padding:6px 10px;">${ICON.trash}</button>
-          </div>
-          <div style="margin-top:10px; display:flex; align-items:center; gap:10px;">
-            <small style="font-size:10px; color:var(--muted); letter-spacing:0.08em; text-transform:uppercase;">Cantidad recibida</small>
-            <input type="number" class="input mono" data-edit-qty="${idx}" value="${it.cantidad}" min="1" style="width:80px; padding:6px 10px; font-size:14px; text-align:center;" />
-            <small style="color:var(--muted); font-size:12px;">unidades</small>
-          </div>
-        </div>
+  const stepHeader = `
+    <div class="wizard-steps">
+      ${[1,2,3,4].map(n => `
+        <div class="wizard-step-dot ${nb.step >= n ? 'done' : ''} ${nb.step === n ? 'active' : ''}">${n}</div>
+        ${n < 4 ? `<div class="wizard-step-line ${nb.step > n ? 'done' : ''}"></div>` : ''}
       `).join('')}
     </div>
-
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:20px;">
-      <button class="btn btn-sm" id="btn-scan-prod">${ICON.barcode} Escanear</button>
-      <button class="btn btn-sm" id="btn-pick-prod">${ICON.list} Seleccionar</button>
+    <div class="wizard-step-label">
+      Paso ${nb.step} de ${TOTAL_STEPS} · ${
+        nb.step === 1 ? 'Tipo y código' :
+        nb.step === 2 ? 'Imprimir QR' :
+        nb.step === 3 ? 'Escanear productos' :
+        'Ubicación destino'
+      }
     </div>
-
-    <div class="section-title" style="padding:0 0 8px;">3 · Ubicación destino</div>
-    <select class="select" id="new-pos">
-      <option value="">— Selecciona dónde se guarda —</option>
-    </select>
-
-    <label class="label" style="margin-top:14px;">Motivo / origen</label>
-    <select class="select" id="new-motivo">
-      <option value="Recepción de proveedor">Recepción de proveedor</option>
-      <option value="Reposición desde otra caja">Reposición desde otra caja</option>
-      <option value="Reorganización de bodega">Reorganización de bodega</option>
-      <option value="Transferencia entre tiendas">Transferencia entre tiendas</option>
-      <option value="Otro">Otro</option>
-    </select>
   `;
 
-  const footerHtml = `
-    <button class="btn grow" id="cancel-create">Cancelar</button>
-    <button class="btn btn-primary grow" id="confirm-create">Crear caja</button>
-  `;
-  const modal = modalShell('Iniciar caja nueva', bodyHtml, footerHtml);
+  let body, footer;
 
-  modal.querySelectorAll('[data-tipo]').forEach(b => {
-    b.onclick = () => { nb.tipo_caja = b.dataset.tipo; render(); };
-  });
+  // ── PASO 1: tipo + código ─────────────────────────────────────────
+  if (nb.step === 1) {
+    const isProducto = nb.tipo_caja === 'producto';
+    body = `
+      ${stepHeader}
+      <div class="section-title" style="padding:0 0 8px;">Tipo de caja</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:18px;">
+        <button class="btn ${isProducto ? 'btn-primary' : ''}" data-tipo="producto" style="flex-direction:column; padding:14px; min-height:auto; gap:4px; text-align:center;">
+          ${ICON.box}
+          <div style="font-size:13px; font-weight:600;">Caja del producto</div>
+          <div style="font-size:10px; opacity:0.7; font-weight:400;">capacidad estándar</div>
+        </button>
+        <button class="btn ${!isProducto ? 'btn-primary' : ''}" data-tipo="reutilizable" style="flex-direction:column; padding:14px; min-height:auto; gap:4px; text-align:center;">
+          ${ICON.box}
+          <div style="font-size:13px; font-weight:600;">Caja reutilizable</div>
+          <div style="font-size:10px; opacity:0.7; font-weight:400;">caja de bodega</div>
+        </button>
+      </div>
 
-  API.listPosiciones().then(positions => {
-    const sel = modal.querySelector('#new-pos');
-    positions.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.id;
-      opt.textContent = `${p.ubicacion} · ${p.descripcion}`;
-      if (nb.posicion_id === p.id) opt.selected = true;
-      sel.appendChild(opt);
-    });
-  });
+      <div class="section-title" style="padding:0 0 8px;">Código QR generado</div>
+      <div class="box-header" style="margin-bottom:12px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+          <div class="box-code mono" id="new-codigo">${escapeHtml(nb.codigo)}</div>
+          <button class="btn btn-sm btn-ghost" id="btn-regen" title="Generar otro">${ICON.refresh}</button>
+        </div>
+        <div style="font-size:11px; color:var(--muted); margin-top:6px;">
+          Se imprimirá como QR para pegar en la caja física.
+        </div>
+      </div>
+    `;
+    footer = `
+      <button class="btn grow" id="wiz-cancel">Cancelar</button>
+      <button class="btn btn-primary grow" id="wiz-next">Siguiente →</button>
+    `;
+  }
 
-  modal.querySelector('#new-motivo').value = nb.motivo;
-  modal.querySelector('#btn-regen').onclick = () => {
-    nb.codigo = generateBoxCode();
-    modal.querySelector('#new-codigo').textContent = nb.codigo;
-    toast('Código regenerado', 'info');
-  };
-  modal.querySelector('#new-pos').onchange = e => { nb.posicion_id = parseInt(e.target.value) || null; };
-  modal.querySelector('#new-motivo').onchange = e => { nb.motivo = e.target.value; };
+  // ── PASO 2: imprimir QR ───────────────────────────────────────────
+  else if (nb.step === 2) {
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&ecc=M&data=${encodeURIComponent(nb.codigo)}`;
+    body = `
+      ${stepHeader}
+      <p style="font-size:13px; color:var(--muted); margin-bottom:12px;">
+        Imprimí este QR y pegalo en la caja antes de continuar.
+      </p>
+      <div style="background:#fff; padding:18px; display:flex; flex-direction:column; align-items:center; gap:10px; border:1px solid var(--border); border-radius:12px;">
+        <img src="${qrUrl}" width="200" height="200" alt="${escapeHtml(nb.codigo)}" style="display:block;" />
+        <div class="mono" style="font-size:13px; font-weight:700; color:#000;">${escapeHtml(nb.codigo)}</div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <button class="btn grow" id="wiz-copy">${ICON.copy || '📋'} Copiar código</button>
+        <button class="btn grow" id="wiz-fullprint">Abrir vista de impresión</button>
+      </div>
+    `;
+    footer = `
+      <button class="btn grow" id="wiz-back">← Atrás</button>
+      <button class="btn btn-primary grow" id="wiz-next">Ya imprimí →</button>
+    `;
+  }
 
-  modal.querySelectorAll('[data-edit-qty]').forEach(inp => {
-    inp.onchange = e => {
-      const idx = parseInt(e.target.dataset.editQty);
-      const v = Math.max(1, parseInt(e.target.value) || 1);
-      nb.items[idx].cantidad = v;
-      e.target.value = v;
-    };
-  });
+  // ── PASO 3: productos ─────────────────────────────────────────────
+  else if (nb.step === 3) {
+    body = `
+      ${stepHeader}
+      <div class="section-title" style="padding:0 0 8px;">
+        Productos de la caja <small id="items-count" style="color:var(--accent); font-weight:700;">${nb.items.length}</small>
+      </div>
+      <div id="items-list" style="margin-bottom:10px;">
+        ${nb.items.length === 0 ? `
+          <div class="empty" style="padding:20px; border:1px dashed var(--border-2); border-radius:10px;">
+            ${ICON.box}
+            <p style="margin-top:8px; font-size:13px;">Escaneá productos para agregarlos</p>
+          </div>
+        ` : nb.items.map((it, idx) => `
+          <div class="qty-row">
+            <div class="qty-row-top">
+              <div class="grow">
+                <div class="qty-row-name">${escapeHtml(it.articulo.descripcion)}</div>
+                <div class="qty-row-sku mono">${escapeHtml(it.articulo.sku || '—')}</div>
+              </div>
+              <button class="btn btn-sm btn-danger" data-rm="${idx}" style="padding:6px 10px;">${ICON.trash || '✕'}</button>
+            </div>
+            <div style="margin-top:8px; display:flex; align-items:center; gap:10px;">
+              <small style="font-size:10px; color:var(--muted); text-transform:uppercase;">Cantidad</small>
+              <input type="number" inputmode="numeric" pattern="[0-9]*" class="input mono" data-edit-qty="${idx}" value="${it.cantidad}" min="1" style="width:90px; padding:8px; font-size:14px; text-align:center;" />
+              <small style="color:var(--muted); font-size:12px;">unidades</small>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <button class="btn btn-block btn-primary" id="btn-scan-prod" style="margin-bottom:8px;">
+        ${ICON.scan} Escanear producto
+      </button>
+      <button class="btn btn-block btn-ghost" id="btn-pick-prod">
+        ${ICON.list} Seleccionar manualmente
+      </button>
+    `;
+    footer = `
+      <button class="btn grow" id="wiz-back">← Atrás</button>
+      <button class="btn btn-primary grow" id="wiz-next" ${nb.items.length === 0 ? 'disabled' : ''}>Siguiente →</button>
+    `;
+  }
 
-  modal.querySelectorAll('[data-rm]').forEach(b => {
-    b.onclick = () => {
-      const idx = parseInt(b.dataset.rm);
-      nb.items.splice(idx, 1);
-      render();
-    };
-  });
+  // ── PASO 4: ubicación + crear ─────────────────────────────────────
+  else if (nb.step === 4) {
+    body = `
+      ${stepHeader}
+      <div class="section-title" style="padding:0 0 8px;">¿Dónde se guarda esta caja?</div>
+      <div id="new-pos-list" class="lote-pos-grid">
+        <div class="empty" style="padding:24px 0;"><div class="loader"></div></div>
+      </div>
+      <input type="hidden" id="new-pos" value="${nb.posicion_id || ''}" />
 
-  modal.querySelector('#btn-scan-prod').onclick = () => {
-    State.modal = 'scanProduct'; render();
-  };
+      <div class="section-title" style="padding:14px 0 6px;">Resumen</div>
+      <div style="font-size:12px; color:var(--muted); background:var(--surface-2); padding:10px 12px; border-radius:10px;">
+        <div><strong style="color:var(--text);">Código:</strong> <span class="mono">${escapeHtml(nb.codigo)}</span></div>
+        <div><strong style="color:var(--text);">Tipo:</strong> ${nb.tipo_caja}</div>
+        <div><strong style="color:var(--text);">Productos:</strong> ${nb.items.length} (${nb.items.reduce((s, it) => s + it.cantidad, 0)} unidades)</div>
+      </div>
+    `;
+    footer = `
+      <button class="btn grow" id="wiz-back">← Atrás</button>
+      <button class="btn btn-primary grow" id="wiz-create">${ICON.check} Crear caja</button>
+    `;
+  }
 
-  modal.querySelector('#btn-pick-prod').onclick = async () => {
-    const articulos = await API.listArticulos();
-    const sku = prompt('Ingresá el SKU o código del producto:\n\n' +
-      articulos.slice(0, 10).map(a => `${a.sku} · ${a.descripcion}`).join('\n'));
-    if (!sku) return;
-    const found = articulos.find(a =>
-      a.sku === sku.trim() || a.codigo_barras === sku.trim() ||
-      a.descripcion.toLowerCase().includes(sku.trim().toLowerCase())
-    );
-    if (!found) { toast('No encontré ese producto', 'error'); return; }
-    addProductToNewBox(found);
-  };
+  const modal = modalShell('Iniciar caja nueva', body, footer);
 
-  modal.querySelector('#cancel-create').onclick = () => {
+  // ── Handlers comunes ──
+  modal.querySelector('#wiz-cancel')?.addEventListener('click', () => {
     if (confirm('¿Descartar la caja en progreso?')) {
       State.cache.newBox = null;
       closeModal();
     }
-  };
+  });
+  modal.querySelector('#wiz-back')?.addEventListener('click', () => {
+    nb.step = Math.max(1, nb.step - 1);
+    render();
+  });
 
-  modal.querySelector('#confirm-create').onclick = async () => {
-    if (!nb.posicion_id) { toast('Selecciona una ubicación', 'error'); return; }
-    if (!nb.items.length) {
-      if (!confirm('La caja está vacía. ¿Crear de todos modos?')) return;
-    }
-    try {
-      await API.createCaja({
-        codigo_caja: nb.codigo,
-        tipo_caja: nb.tipo_caja,
-        posicion_id: nb.posicion_id,
-        items: nb.items.map(it => ({ articulo_id: it.articulo.id, cantidad: it.cantidad })),
-        motivo: nb.motivo
-      });
-      toast('Caja creada · ' + nb.codigo, 'success');
+  // ── Paso 1 ──
+  if (nb.step === 1) {
+    modal.querySelectorAll('[data-tipo]').forEach(b => {
+      b.onclick = () => { nb.tipo_caja = b.dataset.tipo; render(); };
+    });
+    modal.querySelector('#btn-regen').onclick = () => {
+      nb.codigo = generateBoxCode();
+      modal.querySelector('#new-codigo').textContent = nb.codigo;
+      toast('Código regenerado', 'info');
+    };
+    modal.querySelector('#wiz-next').onclick = () => { nb.step = 2; render(); };
+  }
+
+  // ── Paso 2 ──
+  if (nb.step === 2) {
+    modal.querySelector('#wiz-copy').onclick = () => {
+      navigator.clipboard?.writeText(nb.codigo).then(
+        () => toast('Código copiado', 'success'),
+        () => toast('No se pudo copiar', 'error')
+      );
+    };
+    modal.querySelector('#wiz-fullprint').onclick = () => {
       State.cache.printCode = nb.codigo;
-      State.cache.newBox = null;
+      State.cache.printReturnTo = 'create';
       State.modal = 'print';
       render();
-    } catch (e) {
-      toast('Error: ' + e.message, 'error');
-    }
-  };
+    };
+    modal.querySelector('#wiz-next').onclick = () => { nb.step = 3; render(); };
+  }
+
+  // ── Paso 3 ──
+  if (nb.step === 3) {
+    modal.querySelectorAll('[data-edit-qty]').forEach(inp => {
+      inp.onchange = e => {
+        const idx = parseInt(e.target.dataset.editQty);
+        const v = Math.max(1, parseInt(e.target.value) || 1);
+        nb.items[idx].cantidad = v;
+        e.target.value = v;
+      };
+    });
+    modal.querySelectorAll('[data-rm]').forEach(b => {
+      b.onclick = () => {
+        const idx = parseInt(b.dataset.rm);
+        nb.items.splice(idx, 1);
+        render();
+      };
+    });
+    modal.querySelector('#btn-scan-prod').onclick = () => {
+      State.modal = 'scanProduct'; render();
+    };
+    modal.querySelector('#btn-pick-prod').onclick = async () => {
+      const articulos = await API.listArticulos();
+      const sku = prompt('Ingresá el SKU o código del producto:\n\n' +
+        articulos.slice(0, 10).map(a => `${a.sku} · ${a.descripcion}`).join('\n'));
+      if (!sku) return;
+      const found = articulos.find(a =>
+        a.sku === sku.trim() || a.codigo_barras === sku.trim() ||
+        a.descripcion.toLowerCase().includes(sku.trim().toLowerCase())
+      );
+      if (!found) { toast('No encontré ese producto', 'error'); return; }
+      addProductToNewBox(found);
+    };
+    modal.querySelector('#wiz-next').onclick = () => {
+      if (!nb.items.length) { toast('Agregá al menos un producto', 'warn'); return; }
+      nb.step = 4; render();
+    };
+  }
+
+  // ── Paso 4 ──
+  if (nb.step === 4) {
+    API.listPosiciones().then(positions => {
+      const list = modal.querySelector('#new-pos-list');
+      const hidden = modal.querySelector('#new-pos');
+      if (!list) return;
+      if (!positions.length) {
+        list.innerHTML = `<div class="empty" style="padding:14px 0;"><p>Sin ubicaciones disponibles</p></div>`;
+        return;
+      }
+      list.innerHTML = positions.map(p => `
+        <button class="lote-pos-card ${nb.posicion_id === p.id ? 'selected' : ''}" data-pid="${p.id}">
+          <div class="lote-pos-icon">${ICON.pin}</div>
+          <div class="lote-pos-text">
+            <div class="lote-pos-name">${escapeHtml(p.ubicacion || '—')}</div>
+            <div class="lote-pos-desc mono">${escapeHtml(p.descripcion || '')}</div>
+          </div>
+        </button>
+      `).join('');
+      list.querySelectorAll('.lote-pos-card').forEach(btn => {
+        btn.onclick = () => {
+          list.querySelectorAll('.lote-pos-card').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          hidden.value = btn.dataset.pid;
+          nb.posicion_id = parseInt(btn.dataset.pid);
+        };
+      });
+    });
+
+    modal.querySelector('#wiz-create').onclick = async () => {
+      if (!nb.posicion_id) { toast('Seleccioná una ubicación', 'error'); return; }
+      try {
+        await API.createCaja({
+          codigo_caja: nb.codigo,
+          tipo_caja: nb.tipo_caja,
+          posicion_id: nb.posicion_id,
+          items: nb.items.map(it => ({ articulo_id: it.articulo.id, cantidad: it.cantidad })),
+          motivo: nb.motivo
+        });
+        toast('Caja creada · ' + nb.codigo, 'success');
+        State.cache.printCode = nb.codigo;
+        State.cache.newBox = null;
+        State.modal = 'print';
+        render();
+      } catch (e) {
+        toast('Error: ' + e.message, 'error');
+      }
+    };
+  }
 
   return modal;
 }

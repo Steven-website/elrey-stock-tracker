@@ -665,6 +665,47 @@ main {
 .lote-pos-name { font-size: 14px; font-weight: 600; color: var(--text); }
 .lote-pos-desc { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
+/* Wizard step indicator */
+.wizard-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.wizard-step-dot {
+  width: 26px; height: 26px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700;
+  flex-shrink: 0;
+}
+.wizard-step-dot.done {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+.wizard-step-dot.active {
+  box-shadow: 0 0 0 3px rgba(245, 159, 11, 0.25);
+}
+.wizard-step-line {
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+  max-width: 30px;
+}
+.wizard-step-line.done { background: var(--accent); }
+.wizard-step-label {
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 14px;
+  font-weight: 600;
+}
+
 .scan-frame {
   width: 200px; height: 200px;
   position: relative;
