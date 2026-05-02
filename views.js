@@ -294,9 +294,11 @@ export function renderScanView() {
       <button class="btn btn-block" id="btn-create-from-scan">
         ${ICON.add} Crear caja nueva
       </button>
+      ${esOperario ? '' : `
       <button class="btn btn-block" id="btn-mover-lote-enter" style="border-color:var(--accent); color:var(--accent);">
         ${ICON.move} Mover cajas en lote
       </button>
+      `}
     </div>
 
     ${esOperario ? '' : `
@@ -325,14 +327,14 @@ export function renderScanView() {
     startScanner('qr-reader', handleCodeScanned);
   };
 
-  wrap.querySelector('#btn-create-from-scan').onclick = () => {
+  wrap.querySelector('#btn-create-from-scan')?.addEventListener('click', () => {
     if (scannerActive()) stopScanner();
     State.cache.newBox = null;
     State.modal = 'create';
     render();
-  };
+  });
 
-  wrap.querySelector('#btn-mover-lote-enter').onclick = () => {
+  wrap.querySelector('#btn-mover-lote-enter')?.addEventListener('click', () => {
     if (scannerActive()) stopScanner();
     State.cache.loteBoxes = [];
     State.view = 'mover-lote';
