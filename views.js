@@ -294,11 +294,9 @@ export function renderScanView() {
       <button class="btn btn-block" id="btn-create-from-scan">
         ${ICON.add} Crear caja nueva
       </button>
-      ${esOperario ? '' : `
       <button class="btn btn-block" id="btn-mover-lote-enter" style="border-color:var(--accent); color:var(--accent);">
         ${ICON.move} Mover cajas en lote
       </button>
-      `}
     </div>
 
     ${esOperario ? '' : `
