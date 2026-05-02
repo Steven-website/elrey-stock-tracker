@@ -163,7 +163,8 @@ export function renderBoxModal() {
 
   const footerHtml = isConsumed
     ? `<button class="btn btn-block" id="btn-history">${ICON.history} Ver historial</button>`
-    : `<button class="btn grow" id="btn-move">${ICON.move} Mover</button>
+    : `<button class="btn grow" id="btn-print-box">${ICON.qr} Imprimir</button>
+       <button class="btn grow" id="btn-move">${ICON.move} Mover</button>
        <button class="btn grow" id="btn-history">${ICON.history} Historial</button>`;
 
   const modal = modalShell('Detalle de caja', bodyHtml, footerHtml);
@@ -177,6 +178,11 @@ export function renderBoxModal() {
   });
   modal.querySelector('#btn-move')?.addEventListener('click', () => { State.modal = 'move'; render(); });
   modal.querySelector('#btn-history').onclick = () => { State.modal = 'history'; render(); };
+  modal.querySelector('#btn-print-box')?.addEventListener('click', () => {
+    State.cache.printCode = c.codigo_caja;
+    State.modal = 'print';
+    render();
+  });
 
   modal.querySelector('#btn-scan-prod-in-box')?.addEventListener('click', () => {
     State.modal = 'scanProductInBox';
