@@ -108,6 +108,16 @@ export function renderBoxModal() {
       </div>
     ` : ''}
 
+    ${!isConsumed ? `
+      <div style="display:flex; gap:8px; margin-bottom:12px;">
+        <button class="btn grow" id="btn-print-box-top">${ICON.qr} Imprimir</button>
+        <button class="btn grow" id="btn-move-top">${ICON.move} Mover</button>
+        ${State.user?.rol === 'operario' ? '' : `
+        <button class="btn grow" id="btn-history-top">${ICON.history} Historial</button>
+        `}
+      </div>
+    ` : ''}
+
     <div class="section-title" style="padding:0 0 8px;">Contenido</div>
     ${!isConsumed ? `
       <button class="btn btn-block" id="btn-scan-prod-in-box" style="margin-bottom:10px;">
@@ -163,14 +173,7 @@ export function renderBoxModal() {
 
   const footerHtml = isConsumed
     ? `<button class="btn btn-block" id="btn-history">${ICON.history} Ver historial</button>`
-    : `<div style="display:flex; flex-direction:column; gap:8px; width:100%;">
-         <div style="display:flex; gap:8px;">
-           <button class="btn grow" id="btn-print-box">${ICON.qr} Imprimir</button>
-           <button class="btn grow" id="btn-move">${ICON.move} Mover</button>
-           <button class="btn grow" id="btn-history">${ICON.history} Historial</button>
-         </div>
-         <button class="btn btn-danger btn-block" id="btn-destroy">${ICON.trash || '✕'} Destruir caja</button>
-       </div>`;
+    : `<button class="btn btn-danger btn-block" id="btn-destroy">${ICON.trash || '✕'} Destruir caja</button>`;
 
   const modal = modalShell('Detalle de caja', bodyHtml, footerHtml);
 
@@ -181,12 +184,18 @@ export function renderBoxModal() {
       render();
     };
   });
-  modal.querySelector('#btn-move')?.addEventListener('click', () => { State.modal = 'move'; render(); });
-  modal.querySelector('#btn-history').onclick = () => { State.modal = 'history'; render(); };
-  modal.querySelector('#btn-print-box')?.addEventListener('click', () => {
-    State.cache.printCode = c.codigo_caja;
-    State.modal = 'print';
-    render();
+  modal.querySelectorAll('#btn-move, #btn-move-top').forEach(b => {
+    b.onclick = () => { State.modal = 'move'; render(); };
+  });
+  modal.querySelectorAll('#btn-history, #btn-history-top').forEach(b => {
+    b.onclick = () => { State.modal = 'history'; render(); };
+  });
+  modal.querySelectorAll('#btn-print-box, #btn-print-box-top').forEach(b => {
+    b.onclick = () => {
+      State.cache.printCode = c.codigo_caja;
+      State.modal = 'print';
+      render();
+    };
   });
 
   modal.querySelector('#btn-destroy')?.addEventListener('click', async () => {
