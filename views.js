@@ -291,6 +291,14 @@ export function renderScanView() {
       <button class="btn btn-block" id="btn-create-from-scan">
         ${ICON.add} Crear caja nueva
       </button>
+      <button class="action-card" id="btn-add-to-existing">
+        <div class="action-card-icon">${ICON.scan}</div>
+        <div class="action-card-text">
+          <div class="action-card-title">Agregar productos a una caja</div>
+          <div class="action-card-sub">Escaneá una caja ya creada y sumale productos</div>
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="action-card-arrow"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
       <button class="btn btn-block" id="btn-mover-lote-enter" style="border-color:var(--accent); color:var(--accent);">
         ${ICON.move} Mover cajas en lote
       </button>
@@ -350,6 +358,18 @@ export function renderScanView() {
     State.cache.newBox = null;
     State.modal = 'create';
     render();
+  });
+
+  wrap.querySelector('#btn-add-to-existing')?.addEventListener('click', () => {
+    if (scannerActive()) stopScanner();
+    // Escanea código de caja existente, abre el detalle (donde se puede
+    // escanear producto y reducir/reponer/mover/imprimir).
+    const hero = document.querySelector('.scan-hero-inner');
+    if (hero) {
+      hero.innerHTML = '<div id="qr-reader"></div><div class="scan-overlay"><div class="scan-frame"><span></span><span></span><div class="scan-line"></div></div></div>';
+    }
+    startScanner('qr-reader', handleCodeScanned);
+    toast('Apuntá al QR de la caja a la que querés agregar productos', 'info');
   });
 
   wrap.querySelector('#btn-mover-lote-enter')?.addEventListener('click', () => {

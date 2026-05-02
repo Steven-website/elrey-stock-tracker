@@ -568,12 +568,23 @@ export function renderCreateBoxModal() {
       </div>
       <div style="display:flex; gap:8px; margin-top:12px;">
         <button class="btn grow" id="wiz-copy">${ICON.copy || '📋'} Copiar código</button>
-        <button class="btn grow" id="wiz-fullprint">Abrir vista de impresión</button>
+        <button class="btn grow" id="wiz-fullprint">Imprimir</button>
+      </div>
+      <div style="margin-top:14px; padding:12px; border:1px dashed var(--border); border-radius:10px; background:var(--surface-2);">
+        <div style="font-size:12px; font-weight:700; color:var(--text); margin-bottom:6px;">
+          ✓ Verificá la etiqueta impresa
+        </div>
+        <div style="font-size:11px; color:var(--muted); margin-bottom:8px;">
+          Apuntá la cámara al QR que acabás de pegar en la caja para confirmar que se lee bien.
+        </div>
+        <button class="btn btn-block btn-primary" id="wiz-verify-scan">
+          ${ICON.scan} Escanear QR de la caja
+        </button>
       </div>
     `;
     footer = `
       <button class="btn grow" id="wiz-back">← Atrás</button>
-      <button class="btn btn-primary grow" id="wiz-next">Ya imprimí →</button>
+      <button class="btn grow" id="wiz-next">Saltar verificación →</button>
     `;
   }
 
@@ -683,6 +694,34 @@ export function renderCreateBoxModal() {
       State.cache.printReturnTo = 'create';
       State.modal = 'print';
       render();
+    };
+    modal.querySelector('#wiz-verify-scan').onclick = async () => {
+      try {
+        const { startScanner: ss, stopScanner: stp } = await import('./scanner.js');
+        // Crear contenedor temporal y abrir escáner full-screen rápido
+        const overlay = document.createElement('div');
+        overlay.id = 'wiz-verify-overlay';
+        overlay.style.cssText = 'position:fixed;inset:0;background:#0f172a;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;';
+        overlay.innerHTML = `
+          <div style="color:#fff;font-size:14px;margin-bottom:10px;">Apuntá al QR que pegaste</div>
+          <div id="wiz-verify-reader" style="width:100%;max-width:360px;height:360px;background:#000;border-radius:14px;overflow:hidden;position:relative;"></div>
+          <button class="btn" id="wiz-verify-cancel" style="margin-top:14px;background:#fff;color:#000;">Cancelar</button>
+        `;
+        document.body.appendChild(overlay);
+        const cleanup = () => { stp(); overlay.remove(); };
+        overlay.querySelector('#wiz-verify-cancel').onclick = cleanup;
+        ss('wiz-verify-reader', (decoded) => {
+          cleanup();
+          if (decoded.trim() === nb.codigo) {
+            toast('✓ Verificado — pasando a productos', 'success');
+            nb.step = 3; render();
+          } else {
+            toast(`⚠ El QR escaneado no coincide (${decoded.slice(0,12)}…)`, 'error');
+          }
+        });
+      } catch (e) {
+        toast('Error al abrir cámara: ' + e.message, 'error');
+      }
     };
     modal.querySelector('#wiz-next').onclick = () => { nb.step = 3; render(); };
   }

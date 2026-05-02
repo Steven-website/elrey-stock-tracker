@@ -706,6 +706,51 @@ main {
   font-weight: 600;
 }
 
+/* Action card — botón grande estilo card para acciones principales */
+.action-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, rgba(245,159,11,0.12) 0%, rgba(245,159,11,0.04) 100%);
+  border: 1px solid rgba(245,159,11,0.35);
+  border-radius: 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.1s, box-shadow 0.15s;
+}
+.action-card:active {
+  transform: scale(0.98);
+  box-shadow: 0 2px 8px rgba(245,159,11,0.2);
+}
+.action-card-icon {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #000;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.action-card-icon svg { width: 22px; height: 22px; }
+.action-card-text { min-width: 0; flex: 1; }
+.action-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.action-card-sub {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.action-card-arrow {
+  width: 16px; height: 16px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
 .scan-frame {
   width: 200px; height: 200px;
   position: relative;
