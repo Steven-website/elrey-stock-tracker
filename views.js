@@ -1011,11 +1011,27 @@ function renderMoverLoteView() {
   wrap.querySelector('#btn-lote-ok').onclick = submit;
   inp.onkeydown = e => { if (e.key === 'Enter') submit(); };
 
-  wrap.querySelector('#btn-lote-cam').onclick = () => {
+  const startLoteCam = () => {
     const hero = wrap.querySelector('.scan-hero-inner');
     if (hero) hero.innerHTML = `<div id="lote-qr-reader"></div><div class="scan-overlay"><div class="scan-frame"><span></span><span></span><div class="scan-line"></div></div></div>`;
-    startScanner('lote-qr-reader', handleScan, { continuous: true });
+    startScanner('lote-qr-reader', async (code) => {
+      await handleScan(code);
+      // Tras agregar la caja, mostrar prompt: escanear otra o finalizar
+      setTimeout(() => {
+        const seguir = confirm(
+          `${State.cache.loteBoxes.length} caja(s) en lista.\n\n` +
+          `Aceptar = ESCANEAR OTRA\nCancelar = FINALIZAR y elegir ubicación`
+        );
+        if (seguir) {
+          startLoteCam();
+        } else if (State.cache.loteBoxes.length > 0) {
+          State.modal = 'moverLote';
+          render();
+        }
+      }, 200);
+    });
   };
+  wrap.querySelector('#btn-lote-cam').onclick = startLoteCam;
 
   wrap.querySelector('#btn-lote-exit').onclick = () => {
     if (scannerActive()) stopScanner();
