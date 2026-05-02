@@ -1431,6 +1431,131 @@ export function renderScanProductForBatchModal() {
 }
 
 // =====================================================================
+// INVENTARIO DE UBICACIÓN — cajas + productos sueltos en una posición
+// =====================================================================
+export function renderInventarioUbicacionModal() {
+  const inv = State.cache.invUbic || (State.cache.invUbic = { posicionId: null });
+  const isAdmin = ['admin','admin_tienda','supervisor','jefe_inventario'].includes(State.user?.rol);
+
+  const headerHtml = `
+    <div class="section-title" style="padding:0 0 8px;">Elegí la ubicación</div>
+    <div id="inv-pos-list" class="lote-pos-grid" style="margin-bottom:12px;">
+      <div class="empty" style="padding:18px 0;"><div class="loader"></div></div>
+    </div>
+    <div id="inv-content"></div>
+  `;
+  const footerHtml = `<button class="btn btn-block" id="inv-close">Cerrar</button>`;
+  const modal = modalShell('Inventario en ubicación', headerHtml, footerHtml);
+
+  const renderInv = () => {
+    const cont = modal.querySelector('#inv-content');
+    if (!inv.posicionId) { cont.innerHTML = ''; return; }
+    cont.innerHTML = `<div class="empty" style="padding:14px 0;"><div class="loader"></div></div>`;
+    API.getInventarioUbicacion(inv.posicionId).then(({ posicion, cajas, sueltos }) => {
+      cont.innerHTML = `
+        <div class="section-title" style="padding:14px 0 6px;">
+          ${ICON.box} Cajas en esta ubicación <small>${cajas.length}</small>
+        </div>
+        ${cajas.length ? cajas.map(c => `
+          <div class="qty-row">
+            <div class="qty-row-top">
+              <div class="grow">
+                <div class="qty-row-name mono" style="font-size:13px;">${escapeHtml(c.codigo_caja)}</div>
+                <div class="qty-row-sku">${c.unidades_totales} unidades · ${(c.contenido||[]).length} productos</div>
+              </div>
+            </div>
+          </div>
+        `).join('') : '<div class="empty" style="padding:10px 0;font-size:12px;color:var(--muted);">Sin cajas</div>'}
+
+        <div class="section-title" style="padding:14px 0 6px;">
+          ${ICON.list || '·'} Productos sueltos <small>${sueltos.length}</small>
+        </div>
+        ${sueltos.length ? sueltos.map(s => `
+          <div class="qty-row">
+            <div class="qty-row-top">
+              <div class="grow">
+                <div class="qty-row-name">${escapeHtml(s.articulo?.descripcion || 'Artículo')}</div>
+                <div class="qty-row-sku mono">${escapeHtml(s.articulo?.sku || '—')} · ${escapeHtml(s.articulo?.codigo_barras || '')}</div>
+              </div>
+              <strong style="color:var(--accent); font-size:18px;">${s.cantidad}</strong>
+            </div>
+            ${isAdmin ? `
+              <div style="margin-top:8px; display:flex; gap:6px;">
+                <button class="btn btn-sm btn-success grow" data-add="${s.articulo_id}">${ICON.plus} Agregar</button>
+                <button class="btn btn-sm btn-danger grow" data-sub="${s.articulo_id}">${ICON.minus} Reducir</button>
+              </div>
+            ` : ''}
+          </div>
+        `).join('') : '<div class="empty" style="padding:10px 0;font-size:12px;color:var(--muted);">Sin productos sueltos</div>'}
+
+        ${isAdmin ? `
+          <button class="btn btn-block btn-primary" id="inv-add-suelto" style="margin-top:14px;">
+            ${ICON.add} Agregar producto suelto
+          </button>
+        ` : ''}
+      `;
+
+      cont.querySelectorAll('[data-add]').forEach(b => {
+        b.onclick = async () => {
+          const cant = parseInt(prompt('¿Cuántas unidades agregar?', '1'));
+          if (!cant || cant < 1) return;
+          await API.agregarProductoSuelto(inv.posicionId, parseInt(b.dataset.add), cant);
+          toast('Agregado', 'success'); renderInv();
+        };
+      });
+      cont.querySelectorAll('[data-sub]').forEach(b => {
+        b.onclick = async () => {
+          const cant = parseInt(prompt('¿Cuántas unidades reducir?', '1'));
+          if (!cant || cant < 1) return;
+          try {
+            await API.reducirProductoSuelto(inv.posicionId, parseInt(b.dataset.sub), cant);
+            toast('Reducido', 'success'); renderInv();
+          } catch (e) { toast('Error: ' + e.message, 'error'); }
+        };
+      });
+      cont.querySelector('#inv-add-suelto')?.addEventListener('click', async () => {
+        const arts = await API.listArticulos();
+        const txt = prompt('SKU o código de barras:\n\n' +
+          arts.slice(0, 12).map(a => `${a.sku} · ${a.descripcion}`).join('\n'));
+        if (!txt) return;
+        const found = arts.find(a => a.sku === txt.trim() || a.codigo_barras === txt.trim());
+        if (!found) { toast('Producto no encontrado', 'error'); return; }
+        const cant = parseInt(prompt(`¿Cuántas unidades de "${found.descripcion}"?`, found.unidades_por_caja || '1'));
+        if (!cant || cant < 1) return;
+        await API.agregarProductoSuelto(inv.posicionId, found.id, cant);
+        toast('Producto agregado', 'success'); renderInv();
+      });
+    });
+  };
+
+  API.listPosiciones().then(positions => {
+    const list = modal.querySelector('#inv-pos-list');
+    if (!positions.length) { list.innerHTML = '<div class="empty"><p>Sin ubicaciones</p></div>'; return; }
+    list.innerHTML = positions.map(p => `
+      <button class="lote-pos-card ${inv.posicionId === p.id ? 'selected' : ''}" data-pid="${p.id}">
+        <div class="lote-pos-icon">${ICON.pin}</div>
+        <div class="lote-pos-text">
+          <div class="lote-pos-name">${escapeHtml(p.ubicacion || '—')}</div>
+          <div class="lote-pos-desc mono">${escapeHtml(p.descripcion || '')}</div>
+        </div>
+      </button>
+    `).join('');
+    list.querySelectorAll('.lote-pos-card').forEach(btn => {
+      btn.onclick = () => {
+        list.querySelectorAll('.lote-pos-card').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        inv.posicionId = parseInt(btn.dataset.pid);
+        renderInv();
+      };
+    });
+  });
+
+  modal.querySelector('#inv-close').onclick = () => { State.cache.invUbic = null; closeModal(); };
+
+  return modal;
+}
+
+// =====================================================================
 // CAMBIAR CONTRASEÑA — modal compartido (libre y forzado por expiracion)
 // =====================================================================
 export function renderCambiarPasswordModal() {

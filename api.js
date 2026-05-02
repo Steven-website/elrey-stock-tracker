@@ -475,6 +475,67 @@ export const API = {
     return data.map(m => ({ ...m, articulo: m.articulos, usuario: m.usuarios }));
   },
 
+  // -------------------- INVENTARIO DE UBICACIÓN --------------------
+  // Devuelve lo que hay en una ubicación: cajas + productos sueltos.
+  async getInventarioUbicacion(posicionId) {
+    if (isDemoMode()) {
+      const cajas = MOCK.cajas
+        .filter(c => c.posicion_id === posicionId && c.estado !== 'vacia')
+        .map(c => ({
+          ...c,
+          unidades_totales: (c.contenido || []).reduce((s, i) => s + i.cantidad_actual, 0),
+          posicion: MOCK.posiciones.find(p => p.id === c.posicion_id)
+        }));
+      const sueltos = (MOCK.posicion_contenido || [])
+        .filter(pc => pc.posicion_id === posicionId && pc.cantidad > 0)
+        .map(pc => ({ ...pc, articulo: MOCK.articulos.find(a => a.id === pc.articulo_id) }));
+      const posicion = MOCK.posiciones.find(p => p.id === posicionId);
+      return { posicion, cajas, sueltos };
+    }
+    // Supabase: TODO migrar — por ahora demo-only
+    return { posicion: null, cajas: [], sueltos: [] };
+  },
+
+  async agregarProductoSuelto(posicionId, articuloId, cantidad, motivo = 'Recepción suelta') {
+    cantidad = Math.max(1, parseInt(cantidad) || 1);
+    if (isDemoMode()) {
+      MOCK.posicion_contenido = MOCK.posicion_contenido || [];
+      const ex = MOCK.posicion_contenido.find(pc =>
+        pc.posicion_id === posicionId && pc.articulo_id === articuloId);
+      if (ex) ex.cantidad += cantidad;
+      else MOCK.posicion_contenido.push({
+        id: nextId(MOCK.posicion_contenido),
+        posicion_id: posicionId, articulo_id: articuloId, cantidad
+      });
+      MOCK.movimientos.unshift({
+        id: nextId(MOCK.movimientos), tipo: 'recibir',
+        caja_id: null, articulo_id: articuloId, cantidad,
+        posicion_destino_id: posicionId, usuario_id: State.user?.id,
+        motivo, creado_at: new Date().toISOString()
+      });
+      return true;
+    }
+    return false;
+  },
+
+  async reducirProductoSuelto(posicionId, articuloId, cantidad, motivo = 'Reducción suelta') {
+    cantidad = Math.max(1, parseInt(cantidad) || 1);
+    if (isDemoMode()) {
+      const ex = MOCK.posicion_contenido?.find(pc =>
+        pc.posicion_id === posicionId && pc.articulo_id === articuloId);
+      if (!ex) throw new Error('Producto no está en esta ubicación');
+      ex.cantidad = Math.max(0, ex.cantidad - cantidad);
+      MOCK.movimientos.unshift({
+        id: nextId(MOCK.movimientos), tipo: 'reducir',
+        caja_id: null, articulo_id: articuloId, cantidad,
+        posicion_origen_id: posicionId, usuario_id: State.user?.id,
+        motivo, creado_at: new Date().toISOString()
+      });
+      return true;
+    }
+    return false;
+  },
+
   // -------------------- TIENDAS --------------------
   async listTiendas() {
     if (isDemoMode()) return MOCK.tiendas;
