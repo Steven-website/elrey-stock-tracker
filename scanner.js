@@ -185,19 +185,54 @@ export async function startScanner(elementId, onScan, options = {}) {
   }
 }
 
+// Encuentra el track de video activo en cualquier video del DOM
+function _findVideoTrack() {
+  const videos = document.querySelectorAll('video');
+  for (const v of videos) {
+    if (v.srcObject && typeof v.srcObject.getVideoTracks === 'function') {
+      const tracks = v.srcObject.getVideoTracks();
+      if (tracks.length) return { video: v, track: tracks[0] };
+    }
+  }
+  return null;
+}
+
+let _torchOn = false;
+
 export async function toggleTorch() {
-  const video = document.querySelector('.scan-hero-inner video');
-  if (!video || !video.srcObject) return { ok: false, reason: 'no-stream' };
-  const track = video.srcObject.getVideoTracks?.()[0];
-  if (!track) return { ok: false, reason: 'no-track' };
-  const caps = track.getCapabilities ? track.getCapabilities() : {};
-  if (!caps.torch) return { ok: false, reason: 'not-supported' };
-  const cur = track.getSettings ? !!track.getSettings().torch : false;
+  // Esperar a que el track este "live" — sino getCapabilities devuelve vacio
+  let found = _findVideoTrack();
+  for (let i = 0; i < 10 && !found; i++) {
+    await new Promise(r => setTimeout(r, 100));
+    found = _findVideoTrack();
+  }
+  if (!found) return { ok: false, reason: 'no-stream' };
+  const { track } = found;
+
+  // Esperar a que la cámara este realmente streaming
+  for (let i = 0; i < 8 && track.readyState !== 'live'; i++) {
+    await new Promise(r => setTimeout(r, 150));
+  }
+
+  const next = !_torchOn;
+  // Intento 1: applyConstraints con torch (la mayoria de los browsers)
   try {
-    await track.applyConstraints({ advanced: [{ torch: !cur }] });
-    return { ok: true, on: !cur };
-  } catch (e) {
-    return { ok: false, reason: 'apply-failed', error: String(e?.message || e) };
+    await track.applyConstraints({ advanced: [{ torch: next }] });
+    _torchOn = next;
+    return { ok: true, on: _torchOn };
+  } catch (e1) {
+    // Intento 2: algunos browsers requieren reiniciar el constraint completo
+    try {
+      const caps = track.getCapabilities?.() || {};
+      if (caps.torch === undefined) {
+        return { ok: false, reason: 'not-supported' };
+      }
+      await track.applyConstraints({ torch: next });
+      _torchOn = next;
+      return { ok: true, on: _torchOn };
+    } catch (e2) {
+      return { ok: false, reason: 'apply-failed', error: String(e1?.message || e1) };
+    }
   }
 }
 
@@ -246,7 +281,8 @@ export function stopScanner() {
     try { _scanner.stop().then(() => _scanner.clear()).catch(()=>{}); } catch(e) {}
     _scanner = null;
   }
-  // Quitar torch buttons huerfanos
+  // Quitar torch buttons huerfanos y resetear estado
   document.querySelectorAll('.scan-torch-btn-auto').forEach(b => b.remove());
+  _torchOn = false;
   _onScanCb = null;
 }
