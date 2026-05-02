@@ -312,6 +312,14 @@ export function renderScanView() {
         </div>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="action-card-arrow"><path d="M9 18l6-6-6-6"/></svg>
       </button>
+      <button class="action-card action-card-purple" id="btn-batch-generate">
+        <div class="action-card-icon action-card-icon-purple">${ICON.qr}</div>
+        <div class="action-card-text">
+          <div class="action-card-title">Generar cajas en lote (Zebra)</div>
+          <div class="action-card-sub">Escaneá un producto y decí cuántas cajas crear e imprimir</div>
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="action-card-arrow"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
     </div>
 
     ${esOperario ? '' : `
@@ -367,6 +375,12 @@ export function renderScanView() {
     if (scannerActive()) stopScanner();
     State.cache.newBox = null;
     State.modal = 'create';
+    render();
+  });
+
+  wrap.querySelector('#btn-batch-generate')?.addEventListener('click', () => {
+    if (scannerActive()) stopScanner();
+    State.modal = 'batchGenerate';
     render();
   });
 
