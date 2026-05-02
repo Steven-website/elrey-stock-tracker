@@ -2,8 +2,6 @@ name: Vendor third-party libs
 on:
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/vendor-libs.yml'
   workflow_dispatch:
 
 jobs:
