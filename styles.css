@@ -475,7 +475,7 @@ main {
 
 .scan-hero-inner {
   position: relative;
-  min-height: 300px;
+  min-height: 220px;
   display: flex;
   align-items: stretch;
   justify-content: stretch;
@@ -485,27 +485,27 @@ main {
 }
 .scan-hero-inner > div[id]:not(.scan-overlay) {
   flex: 1;
-  min-height: 300px;
+  min-height: 220px;
 }
 
 .scan-idle {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 36px 20px;
-  gap: 14px;
+  padding: 24px 18px;
+  gap: 10px;
   color: #94a3b8;
   text-align: center;
   width: 100%;
 }
-.scan-idle h3 { color: #f1f5f9; font-weight: 700; }
-.scan-idle p { font-size: 13px; opacity: 0.85; }
+.scan-idle h3 { color: #f1f5f9; font-weight: 700; font-size: 14px; }
+.scan-idle p { font-size: 12px; opacity: 0.85; }
 
-.scan-idle svg { width: 56px; height: 56px; color: var(--accent); opacity: 0.9; }
+.scan-idle svg { width: 44px; height: 44px; color: var(--accent); opacity: 0.9; }
 .scan-idle .btn-primary {
-  margin-top: 4px;
-  padding: 12px 28px;
-  font-size: 15px;
+  margin-top: 2px;
+  padding: 10px 24px;
+  font-size: 14px;
   font-weight: 700;
   border-radius: 999px;
   box-shadow: 0 4px 16px -4px rgba(245, 159, 11, 0.5);
