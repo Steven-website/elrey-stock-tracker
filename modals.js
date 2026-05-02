@@ -1061,15 +1061,15 @@ export function renderPrintQRModal() {
       </div>
     </div>
     <div style="background:var(--surface-2); padding:14px; margin-top:12px; font-size:12px; line-height:1.6; color:var(--text-2);">
-      <strong style="color:var(--accent);">Cómo imprimir:</strong><br>
-      1. Tomale screenshot a esta pantalla<br>
-      2. Abrí la app <strong>Print Master</strong> (Phomemo M220)<br>
-      3. Importá la imagen o creá un QR con el texto: <span class="mono" style="color:var(--accent); user-select:text;">${escapeHtml(code)}</span><br>
-      4. Imprimí en etiqueta 50×30mm y pegala en la caja
+      <strong style="color:var(--accent);">3 formas de imprimir:</strong><br>
+      <strong>A) Imprimir directo</strong> — tocá el botón "Imprimir" y elegí cualquier impresora (AirPrint, Bluetooth, USB, oficina).<br>
+      <strong>B) Etiquetadora chica</strong> (Phomemo M220, Brother, Niimbot, etc.) — tomá screenshot, abrí la app de tu impresora, importá la imagen o pegá el texto: <span class="mono" style="color:var(--accent); user-select:text;">${escapeHtml(code)}</span> y mandá a etiqueta 50×30 mm.<br>
+      <strong>C) PC compartida</strong> — copiá el código y pegalo en una hoja con QR online (qr-code-generator.com, etc).
     </div>
   `;
   const footerHtml = `
     <button class="btn grow" id="copy-code">Copiar código</button>
+    <button class="btn grow" id="print-now">${ICON.qr || '🖨'} Imprimir</button>
     <button class="btn btn-primary grow" id="done-print">Listo</button>
   `;
   const modal = modalShell('QR de la caja', bodyHtml, footerHtml);
@@ -1080,10 +1080,29 @@ export function renderPrintQRModal() {
       () => toast('No se pudo copiar', 'error')
     );
   };
+  modal.querySelector('#print-now').onclick = () => {
+    // Abre una ventana imprimible con sólo el QR + código (cualquier impresora)
+    const w = window.open('', '_blank');
+    if (!w) { toast('Permití ventanas emergentes para imprimir', 'warn'); return; }
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(code)}</title>
+<style>
+  @page { size: 50mm 30mm; margin: 0; }
+  @media print { @page { size: 50mm 30mm; margin: 0; } body { margin: 0; } }
+  html, body { margin: 0; padding: 0; background: #fff; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 8px; font-family: -apple-system, sans-serif; }
+  img { width: 80%; max-width: 220px; height: auto; image-rendering: pixelated; }
+  .code { font-family: ui-monospace, 'Courier New', monospace; font-size: 9pt; font-weight: 700; margin-top: 4px; }
+</style></head><body>
+  <img src="${qrUrl}" alt="${escapeHtml(code)}" />
+  <div class="code">${escapeHtml(code)}</div>
+  <script>window.onload=function(){setTimeout(function(){window.print();},250);};</script>
+</body></html>`);
+    w.document.close();
+  };
   modal.querySelector('#done-print').onclick = () => {
     State.cache.printCode = null;
     closeModal();
-    State.view = 'cajas';
+    if (State.user?.rol !== 'operario') State.view = 'cajas';
     render();
   };
   return modal;
