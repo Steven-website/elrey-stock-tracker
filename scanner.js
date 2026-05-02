@@ -152,6 +152,7 @@ export async function startScanner(elementId, onScan, options = {}) {
   if ('BarcodeDetector' in window) {
     try {
       await startNative(elementId, onScan, options);
+      _injectTorchButton(elementId);
       return;
     } catch (e) {
       _native = null;
@@ -168,6 +169,7 @@ export async function startScanner(elementId, onScan, options = {}) {
   // Fallback: html5-qrcode desde CDN
   try {
     await startFallback(elementId, onScan, options);
+    _injectTorchButton(elementId);
   } catch (e) {
     _scanner = null;
     const msg = String(e?.message || e || '');
@@ -199,6 +201,39 @@ export async function toggleTorch() {
   }
 }
 
+// ── Torch button automatico que se inyecta en cada escaner ────────────
+function _injectTorchButton(elementId) {
+  setTimeout(() => {
+    const cont = document.getElementById(elementId);
+    if (!cont) return;
+    // Buscar el padre con position relativa o el propio contenedor
+    let host = cont;
+    if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+    // Evitar duplicar
+    if (host.querySelector('.scan-torch-btn-auto')) return;
+    const btn = document.createElement('button');
+    btn.className = 'scan-torch-btn scan-torch-btn-auto';
+    btn.setAttribute('aria-label', 'Linterna');
+    btn.innerHTML = `
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 2h6l-1 7H10L9 2z"/><path d="M10 9h4l-1 13h-2L10 9z"/>
+      </svg>
+    `;
+    btn.onclick = async () => {
+      const res = await toggleTorch();
+      if (res.ok) {
+        btn.classList.toggle('active', !!res.on);
+        toast(res.on ? 'Linterna encendida' : 'Linterna apagada', 'info');
+      } else if (res.reason === 'not-supported') {
+        toast('Tu cámara no soporta linterna', 'warn');
+      } else {
+        toast('No se pudo activar la linterna', 'error');
+      }
+    };
+    host.appendChild(btn);
+  }, 400);
+}
+
 export function stopScanner() {
   if (_native) {
     _native.stop = true;
@@ -211,5 +246,7 @@ export function stopScanner() {
     try { _scanner.stop().then(() => _scanner.clear()).catch(()=>{}); } catch(e) {}
     _scanner = null;
   }
+  // Quitar torch buttons huerfanos
+  document.querySelectorAll('.scan-torch-btn-auto').forEach(b => b.remove());
   _onScanCb = null;
 }
