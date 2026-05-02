@@ -7,7 +7,7 @@ import { API } from './api.js';
 import { ICON, $, escapeHtml, fmtDate, toast, feedback, generateBoxCode } from './utils.js';
 import { login, logout, isAdmin, isAdminTienda, isSupervisor, canExport } from './auth.js';
 import { getPendingCount } from './queue.js';
-import { startScanner, stopScanner, isActive as scannerActive } from './scanner.js';
+import { startScanner, stopScanner, isActive as scannerActive, toggleTorch } from './scanner.js';
 import { render, resetInactivityTimer } from './main.js';
 import { getAuditLog, clearAuditLog, AUDIT_TIPO } from './audit.js';
 
@@ -320,7 +320,30 @@ export function renderScanView() {
   wrap.querySelector('#btn-start-scan').onclick = () => {
     const hero = document.querySelector('.scan-hero-inner');
     if (hero) {
-      hero.innerHTML = '<div id="qr-reader"></div><div class="scan-overlay"><div class="scan-frame"><span></span><span></span><div class="scan-line"></div></div></div>';
+      hero.innerHTML = `
+        <div id="qr-reader"></div>
+        <div class="scan-overlay">
+          <div class="scan-frame"><span></span><span></span><div class="scan-line"></div></div>
+        </div>
+        <button class="scan-torch-btn" id="btn-torch" aria-label="Linterna">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 2h6l-1 7H10L9 2z"/><path d="M10 9h4l-1 13h-2L10 9z"/>
+          </svg>
+        </button>
+      `;
+      hero.querySelector('#btn-torch').onclick = async () => {
+        const res = await toggleTorch();
+        const btn = hero.querySelector('#btn-torch');
+        if (!btn) return;
+        if (res.ok) {
+          btn.classList.toggle('active', !!res.on);
+          toast(res.on ? 'Linterna encendida' : 'Linterna apagada', 'info');
+        } else if (res.reason === 'not-supported') {
+          toast('Tu cámara no soporta linterna', 'warn');
+        } else {
+          toast('No se pudo activar la linterna', 'error');
+        }
+      };
     }
     startScanner('qr-reader', handleCodeScanned);
   };

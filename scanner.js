@@ -163,6 +163,22 @@ export async function startScanner(elementId, onScan, options = {}) {
   }
 }
 
+export async function toggleTorch() {
+  const video = document.querySelector('.scan-hero-inner video');
+  if (!video || !video.srcObject) return { ok: false, reason: 'no-stream' };
+  const track = video.srcObject.getVideoTracks?.()[0];
+  if (!track) return { ok: false, reason: 'no-track' };
+  const caps = track.getCapabilities ? track.getCapabilities() : {};
+  if (!caps.torch) return { ok: false, reason: 'not-supported' };
+  const cur = track.getSettings ? !!track.getSettings().torch : false;
+  try {
+    await track.applyConstraints({ advanced: [{ torch: !cur }] });
+    return { ok: true, on: !cur };
+  } catch (e) {
+    return { ok: false, reason: 'apply-failed', error: String(e?.message || e) };
+  }
+}
+
 export function stopScanner() {
   if (_native) {
     _native.stop = true;
