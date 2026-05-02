@@ -28,9 +28,7 @@ export function renderLogin() {
     ${isDemoMode ? `
       <div class="banner banner-warn" style="margin-bottom: 16px; border:1px solid; padding: 12px;">
         ${ICON.warn}
-        <span>Estás en <strong>modo demo</strong> con datos simulados.
-          <a href="#" id="link-config" style="color:var(--accent); text-decoration:underline;">Conectar Supabase</a>
-        </span>
+        <span>Estás en <strong>modo demo</strong> con datos en JSON (GitHub).</span>
       </div>
     ` : ''}
 
@@ -59,7 +57,7 @@ export function renderLogin() {
     ` : ''}
 
     <button class="btn btn-ghost btn-block" id="btn-config-bottom" style="margin-top:16px;">
-      ${ICON.settings} Configurar conexión Supabase
+      ${ICON.settings} Configurar backend (GitHub / Supabase)
     </button>
   `;
 
