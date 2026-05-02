@@ -840,12 +840,6 @@ export function renderMoverLoteModal() {
     <select class="select" id="lote-new-pos">
       <option value="">— Seleccioná —</option>
     </select>
-    <label class="label" style="margin-top:16px;">Nota rápida (opcional)</label>
-    <div class="note-chips">
-      ${['Reorganización', 'Temporada', 'Solicitud encargado', 'Más espacio', 'Corrección'].map(n =>
-        `<button class="note-chip" data-note="${n}">${n}</button>`
-      ).join('')}
-    </div>
   `;
   const footerHtml = `
     <button class="btn grow" id="lote-cancel">Cancelar</button>
@@ -863,20 +857,12 @@ export function renderMoverLoteModal() {
     });
   });
 
-  modal.querySelectorAll('.note-chip').forEach(btn => {
-    btn.onclick = () => {
-      const active = btn.classList.contains('active');
-      modal.querySelectorAll('.note-chip').forEach(b => b.classList.remove('active'));
-      if (!active) btn.classList.add('active');
-    };
-  });
-
   modal.querySelector('#lote-cancel').onclick = () => { State.modal = null; render(); };
 
   modal.querySelector('#lote-confirm').onclick = async () => {
     const newPosId = parseInt(modal.querySelector('#lote-new-pos').value);
     if (!newPosId) { toast('Seleccioná una ubicación', 'error'); return; }
-    const notas = modal.querySelector('.note-chip.active')?.dataset.note || '';
+    const notas = '';
     const btn = modal.querySelector('#lote-confirm');
     btn.disabled = true;
     btn.innerHTML = '<span class="loader"></span>';
