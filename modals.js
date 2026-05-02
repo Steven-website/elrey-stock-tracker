@@ -109,6 +109,11 @@ export function renderBoxModal() {
     ` : ''}
 
     <div class="section-title" style="padding:0 0 8px;">Contenido</div>
+    ${!isConsumed ? `
+      <button class="btn btn-block" id="btn-scan-prod-in-box" style="margin-bottom:10px;">
+        ${ICON.scan} Escanear producto para reducir/reponer
+      </button>
+    ` : ''}
     <div id="contenido-list">
   `;
 
@@ -158,6 +163,11 @@ export function renderBoxModal() {
   });
   modal.querySelector('#btn-move')?.addEventListener('click', () => { State.modal = 'move'; render(); });
   modal.querySelector('#btn-history').onclick = () => { State.modal = 'history'; render(); };
+
+  modal.querySelector('#btn-scan-prod-in-box')?.addEventListener('click', () => {
+    State.modal = 'scanProductInBox';
+    render();
+  });
 
   modal.querySelector('#btn-consume')?.addEventListener('click', async () => {
     if (!confirm('¿Marcar esta caja como consumida?\n\nQueda en la base para análisis de consumo, pero ya no aparecerá en la lista activa.')) return;
@@ -757,6 +767,91 @@ async function handleProductScanned(code) {
     State.modal = 'create';
     render();
   }
+}
+
+// =====================================================================
+// ESCANEAR PRODUCTO DENTRO DE UNA CAJA — abre Reducir/Reponer
+// =====================================================================
+export function renderScanProductInBoxModal() {
+  const bodyHtml = `
+    <p style="font-size:13px; color:var(--muted); margin-bottom:12px;">
+      Apuntá la cámara al código de barras del producto que querés reducir o reponer.
+    </p>
+    <div class="scan-hero" style="margin:0;">
+      <div class="scan-hero-inner">
+        <div id="prod-in-box-reader"></div>
+        <div class="scan-overlay">
+          <div class="scan-frame">
+            <span></span><span></span>
+            <div class="scan-line"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <label class="label" style="margin-top:16px;">O ingresá el código a mano</label>
+    <div style="display:flex; gap:8px;">
+      <input class="input mono" id="pib-manual" placeholder="SKU o código de barras" />
+      <button class="btn" id="pib-manual-btn">${ICON.check}</button>
+    </div>
+  `;
+  const footerHtml = `<button class="btn btn-block" id="pib-cancel">Volver</button>`;
+  const modal = modalShell('Escanear producto', bodyHtml, footerHtml);
+
+  setTimeout(() => {
+    startScanner('prod-in-box-reader', handleProductInBoxScanned, {
+      qrbox: { width: 240, height: 160 }
+    });
+  }, 100);
+
+  modal.querySelector('#pib-manual-btn').onclick = () => {
+    const v = modal.querySelector('#pib-manual').value.trim();
+    if (v) { stopScanner(); handleProductInBoxScanned(v); }
+  };
+  modal.querySelector('#pib-manual').onkeydown = e => {
+    if (e.key === 'Enter') {
+      const v = e.target.value.trim();
+      if (v) { stopScanner(); handleProductInBoxScanned(v); }
+    }
+  };
+  modal.querySelector('#pib-cancel').onclick = () => {
+    stopScanner();
+    State.modal = 'box';
+    render();
+  };
+
+  return modal;
+}
+
+async function handleProductInBoxScanned(code) {
+  const caja = State.cache.currentBox;
+  if (!caja) { closeModal(); return; }
+
+  let articulo;
+  try {
+    articulo = await API.findArticuloByCode(code);
+  } catch (e) {
+    toast('Error: ' + e.message, 'error');
+    State.modal = 'box'; render(); return;
+  }
+  if (!articulo) {
+    toast(`No encontré el producto "${code}"`, 'error');
+    State.modal = 'box'; render(); return;
+  }
+
+  // Verificar que el artículo esté dentro de la caja actual
+  const item = (caja.contenido || []).find(it => it.articulo_id === articulo.id);
+  if (!item) {
+    toast(`"${articulo.descripcion}" no está en esta caja`, 'error');
+    State.modal = 'box'; render(); return;
+  }
+
+  // Pregunta rápida: reducir o reponer
+  State.cache.currentArticleId = articulo.id;
+  const accion = confirm(
+    `${articulo.descripcion}\nRestante: ${item.cantidad_actual}\n\nAceptar = REDUCIR\nCancelar = REPONER`
+  );
+  State.modal = accion ? 'reduce' : 'increase';
+  render();
 }
 
 
