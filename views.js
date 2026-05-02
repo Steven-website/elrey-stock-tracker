@@ -207,7 +207,7 @@ export function renderShell() {
         ${canPrint ? '' : `<button data-v="buscar" class="${State.view==='buscar'   ?'active':''}">${ICON.search}<span>Buscar</span></button>`}
         ${canPrint ? '' : `<button data-v="cajas"  class="${State.view==='cajas'    ?'active':''}">${ICON.box}<span>Cajas</span></button>`}
         ${canPrint ? '' : `<button data-v="mov"    class="${State.view==='mov'      ?'active':''}">${ICON.list}<span>Mov.</span>${pending > 0 ? `<span class="nav-badge">${pending}</span>` : ''}</button>`}
-        ${canPrint ? `<button data-v="imprimir" class="${State.view==='imprimir'?'active':''}">${ICON.qr}<span>Imprimir</span></button>` : ''}
+        ${canPrint && State.user?.rol !== 'operario' ? `<button data-v="imprimir" class="${State.view==='imprimir'?'active':''}">${ICON.qr}<span>Imprimir</span></button>` : ''}
         <button data-v="perfil" class="${State.view==='perfil'   ?'active':''}">${ICON.user}<span>Perfil</span></button>
         <button class="nav-logout" id="nav-logout-btn">${ICON.logout}<span>Cerrar sesión</span></button>
       </nav>
