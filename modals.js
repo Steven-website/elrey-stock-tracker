@@ -714,12 +714,16 @@ export function renderCreateBoxModal() {
         overlay.innerHTML = `
           <div style="color:#fff;font-size:14px;margin-bottom:10px;">Apuntá al QR que pegaste</div>
           <div id="wiz-verify-reader" style="width:100%;max-width:360px;height:360px;background:#000;border-radius:14px;overflow:hidden;position:relative;"></div>
-          <button class="btn" id="wiz-verify-cancel" style="margin-top:14px;background:#fff;color:#000;">Cancelar</button>
+          <div style="margin-top:14px; width:100%; max-width:360px; display:flex; gap:6px;">
+            <input class="input mono" id="wv-manual" placeholder="O escribí el código…" autocomplete="off" style="flex:1;" />
+            <button class="btn" id="wv-manual-ok" style="background:#fff;color:#000;">OK</button>
+          </div>
+          <button class="btn" id="wiz-verify-cancel" style="margin-top:10px;background:transparent;color:#fff;border-color:#fff;">Cancelar</button>
         `;
         document.body.appendChild(overlay);
         const cleanup = () => { stp(); overlay.remove(); };
         overlay.querySelector('#wiz-verify-cancel').onclick = cleanup;
-        ss('wiz-verify-reader', (decoded) => {
+        const handleVerify = (decoded) => {
           cleanup();
           if (decoded.trim() === nb.codigo) {
             toast('✓ Verificado — pasando a productos', 'success');
@@ -727,7 +731,14 @@ export function renderCreateBoxModal() {
           } else {
             toast(`⚠ El QR escaneado no coincide (${decoded.slice(0,12)}…)`, 'error');
           }
-        }, { qrbox: { width: 260, height: 260 }, aspectRatio: 1.0 });
+        };
+        const submitWv = () => {
+          const v = overlay.querySelector('#wv-manual').value.trim();
+          if (v) handleVerify(v);
+        };
+        overlay.querySelector('#wv-manual-ok').onclick = submitWv;
+        overlay.querySelector('#wv-manual').onkeydown = e => { if (e.key === 'Enter') submitWv(); };
+        ss('wiz-verify-reader', handleVerify, { qrbox: { width: 260, height: 260 }, aspectRatio: 1.0 });
       } catch (e) {
         toast('Error al abrir cámara: ' + e.message, 'error');
       }
@@ -1350,12 +1361,16 @@ export function renderBatchGenerateModal() {
         overlay.innerHTML = `
           <div style="color:#fff;font-size:14px;margin-bottom:10px;">Apuntá al QR de la etiqueta</div>
           <div id="bg-verify-reader" style="width:100%;max-width:360px;height:360px;background:#000;border-radius:14px;overflow:hidden;position:relative;"></div>
-          <button class="btn" id="bg-verify-cancel" style="margin-top:14px;background:#fff;color:#000;">Cancelar</button>
+          <div style="margin-top:14px; width:100%; max-width:360px; display:flex; gap:6px;">
+            <input class="input mono" id="bv-manual" placeholder="O escribí el código…" autocomplete="off" style="flex:1;" />
+            <button class="btn" id="bv-manual-ok" style="background:#fff;color:#000;">OK</button>
+          </div>
+          <button class="btn" id="bg-verify-cancel" style="margin-top:10px;background:transparent;color:#fff;border-color:#fff;">Cancelar</button>
         `;
         document.body.appendChild(overlay);
         const cleanup = () => { stp(); overlay.remove(); };
         overlay.querySelector('#bg-verify-cancel').onclick = cleanup;
-        ss('bg-verify-reader', (decoded) => {
+        const handleBv = (decoded) => {
           cleanup();
           const match = bg.generated.find(g => g.code === decoded.trim());
           if (!match) { toast(`⚠ ${decoded.slice(0,12)}… no es del lote`, 'error'); return; }
@@ -1363,7 +1378,14 @@ export function renderBatchGenerateModal() {
           match.confirmed = true;
           toast(`✓ ${decoded.slice(-8)} confirmada`, 'success');
           State.modal = 'batchGenerate'; render();
-        }, { qrbox: { width: 260, height: 260 }, aspectRatio: 1.0 });
+        };
+        const submitBv = () => {
+          const v = overlay.querySelector('#bv-manual').value.trim();
+          if (v) handleBv(v);
+        };
+        overlay.querySelector('#bv-manual-ok').onclick = submitBv;
+        overlay.querySelector('#bv-manual').onkeydown = e => { if (e.key === 'Enter') submitBv(); };
+        ss('bg-verify-reader', handleBv, { qrbox: { width: 260, height: 260 }, aspectRatio: 1.0 });
       } catch (e) {
         toast('Error: ' + e.message, 'error');
       }
@@ -1515,17 +1537,10 @@ export function renderInventarioUbicacionModal() {
           } catch (e) { toast('Error: ' + e.message, 'error'); }
         };
       });
-      cont.querySelector('#inv-add-suelto')?.addEventListener('click', async () => {
-        const arts = await API.listArticulos();
-        const txt = prompt('SKU o código de barras:\n\n' +
-          arts.slice(0, 12).map(a => `${a.sku} · ${a.descripcion}`).join('\n'));
-        if (!txt) return;
-        const found = arts.find(a => a.sku === txt.trim() || a.codigo_barras === txt.trim());
-        if (!found) { toast('Producto no encontrado', 'error'); return; }
-        const cant = parseInt(prompt(`¿Cuántas unidades de "${found.descripcion}"?`, found.unidades_por_caja || '1'));
-        if (!cant || cant < 1) return;
-        await API.agregarProductoSuelto(inv.posicionId, found.id, cant);
-        toast('Producto agregado', 'success'); renderInv();
+      cont.querySelector('#inv-add-suelto')?.addEventListener('click', () => {
+        State.cache.invAddTo = inv.posicionId;
+        State.modal = 'agregarSuelto';
+        render();
       });
     });
   };
@@ -1553,6 +1568,128 @@ export function renderInventarioUbicacionModal() {
   });
 
   modal.querySelector('#inv-close').onclick = () => { State.cache.invUbic = null; closeModal(); };
+
+  return modal;
+}
+
+// =====================================================================
+// AGREGAR PRODUCTO SUELTO — escanea o escribe codigo + cantidad
+// =====================================================================
+export function renderAgregarSueltoModal() {
+  const posId = State.cache.invAddTo;
+  if (!posId) { closeModal(); return $(`<div></div>`); }
+
+  const st = State.cache.agSuelto || (State.cache.agSuelto = { articulo: null, cantidad: 1 });
+
+  const bodyHtml = `
+    <p style="font-size:13px; color:var(--muted); margin-bottom:12px;">
+      Escaneá o escribí el código del producto. Después indicá la cantidad.
+    </p>
+
+    <label class="label">Producto</label>
+    ${st.articulo ? `
+      <div class="qty-row">
+        <div class="qty-row-top">
+          <div class="grow">
+            <div class="qty-row-name">${escapeHtml(st.articulo.descripcion)}</div>
+            <div class="qty-row-sku mono">${escapeHtml(st.articulo.sku || '—')} · ${escapeHtml(st.articulo.codigo_barras || '')}</div>
+          </div>
+          <button class="btn btn-sm" id="ag-clear">Cambiar</button>
+        </div>
+      </div>
+    ` : `
+      <div style="display:flex; gap:8px;">
+        <input class="input mono" id="ag-code" placeholder="SKU o código de barras…" autocomplete="off" />
+        <button class="btn" id="ag-search">${ICON.check}</button>
+      </div>
+      <button class="btn btn-block btn-primary" id="ag-scan" style="margin-top:10px;">
+        ${ICON.scan} Escanear
+      </button>
+    `}
+
+    ${st.articulo ? `
+      <label class="label" style="margin-top:14px;">¿Cuántas unidades?</label>
+      <input type="number" inputmode="numeric" pattern="[0-9]*" id="ag-cant" class="input"
+        min="1" value="${st.cantidad}"
+        style="font-size:32px; text-align:center; font-weight:700; padding:14px;" />
+    ` : ''}
+  `;
+
+  const footerHtml = `
+    <button class="btn grow" id="ag-cancel">Cancelar</button>
+    ${st.articulo ? `<button class="btn btn-primary grow" id="ag-save">${ICON.check} Guardar</button>` : ''}
+  `;
+  const modal = modalShell('Agregar producto suelto', bodyHtml, footerHtml);
+
+  const findAndSet = async (txt) => {
+    const cleaned = (txt || '').trim();
+    if (!cleaned) return;
+    try {
+      const art = await API.findArticuloByCode(cleaned);
+      if (!art) { toast(`No encontré "${cleaned}"`, 'error'); return; }
+      st.articulo = art;
+      if (art.unidades_por_caja) st.cantidad = art.unidades_por_caja;
+      render();
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  };
+
+  modal.querySelector('#ag-search')?.addEventListener('click', () => {
+    findAndSet(modal.querySelector('#ag-code').value);
+  });
+  modal.querySelector('#ag-code')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') findAndSet(e.target.value);
+  });
+  modal.querySelector('#ag-clear')?.addEventListener('click', () => {
+    st.articulo = null; render();
+  });
+  modal.querySelector('#ag-scan')?.addEventListener('click', async () => {
+    try {
+      const { startScanner: ss, stopScanner: stp } = await import('./scanner.js');
+      const overlay = document.createElement('div');
+      overlay.style.cssText = 'position:fixed;inset:0;background:#0f172a;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;';
+      overlay.innerHTML = `
+        <div style="color:#fff;font-size:14px;margin-bottom:10px;">Apuntá al código de barras del producto</div>
+        <div id="ag-reader" style="width:100%;max-width:360px;height:280px;background:#000;border-radius:14px;overflow:hidden;position:relative;"></div>
+        <div style="margin-top:14px; width:100%; max-width:360px; display:flex; gap:6px;">
+          <input class="input mono" id="ag-manual" placeholder="O escribí el código…" autocomplete="off" style="flex:1;" />
+          <button class="btn" id="ag-manual-ok" style="background:#fff;color:#000;">OK</button>
+        </div>
+        <button class="btn" id="ag-cancel-scan" style="margin-top:10px;background:transparent;color:#fff;border-color:#fff;">Cancelar</button>
+      `;
+      document.body.appendChild(overlay);
+      const cleanup = () => { stp(); overlay.remove(); };
+      overlay.querySelector('#ag-cancel-scan').onclick = cleanup;
+      const submitManual = () => {
+        const v = overlay.querySelector('#ag-manual').value.trim();
+        if (v) { cleanup(); findAndSet(v); }
+      };
+      overlay.querySelector('#ag-manual-ok').onclick = submitManual;
+      overlay.querySelector('#ag-manual').onkeydown = e => { if (e.key === 'Enter') submitManual(); };
+      ss('ag-reader', (decoded) => { cleanup(); findAndSet(decoded); }, { qrbox: { width: 280, height: 180 } });
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  });
+
+  modal.querySelector('#ag-cant')?.addEventListener('input', e => {
+    st.cantidad = Math.max(1, parseInt(e.target.value) || 1);
+  });
+
+  modal.querySelector('#ag-cancel').onclick = () => {
+    State.cache.agSuelto = null;
+    State.cache.invAddTo = null;
+    State.modal = 'inventarioUbicacion';
+    render();
+  };
+
+  modal.querySelector('#ag-save')?.addEventListener('click', async () => {
+    if (!st.articulo) return;
+    try {
+      await API.agregarProductoSuelto(posId, st.articulo.id, st.cantidad);
+      toast(`✓ ${st.cantidad} × ${st.articulo.descripcion}`, 'success');
+      State.cache.agSuelto = null;
+      State.modal = 'inventarioUbicacion';
+      render();
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
+  });
 
   return modal;
 }
