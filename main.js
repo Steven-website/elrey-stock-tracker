@@ -156,7 +156,51 @@ async function checkSession() {
 // =====================================================================
 // BOOT
 // =====================================================================
+// Refresh forzado al menos cada 24h: borra caches y recarga la app fresca.
+const DAILY_REFRESH_KEY = 'elrey_last_refresh';
+const DAILY_REFRESH_MS  = 24 * 60 * 60 * 1000;
+
+async function _hardRefresh() {
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister().catch(() => {})));
+    }
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+  } catch (_) { /* best-effort */ }
+  Storage.set(DAILY_REFRESH_KEY, Date.now());
+  location.reload();
+}
+
+function setupDailyRefresh() {
+  const last = parseInt(Storage.get(DAILY_REFRESH_KEY) || '0');
+  if (!last) {
+    Storage.set(DAILY_REFRESH_KEY, Date.now());
+    return; // primera vez, no recargar
+  }
+  const due = (Date.now() - last) >= DAILY_REFRESH_MS;
+  if (due) { _hardRefresh(); return; }
+
+  // Re-evaluar al volver a la pestaña y cada hora
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      const t = parseInt(Storage.get(DAILY_REFRESH_KEY) || '0');
+      if ((Date.now() - t) >= DAILY_REFRESH_MS) _hardRefresh();
+    }
+  });
+  setInterval(() => {
+    const t = parseInt(Storage.get(DAILY_REFRESH_KEY) || '0');
+    if ((Date.now() - t) >= DAILY_REFRESH_MS) _hardRefresh();
+  }, 60 * 60 * 1000); // cada hora
+}
+
 async function boot() {
+  // Refresh diario forzado (limpia caches al menos cada 24 h)
+  setupDailyRefresh();
+
   // Si hay backend GitHub configurado, descargar el JSON y poblar MOCK
   if (isGithubMode()) {
     try {
