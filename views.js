@@ -339,7 +339,7 @@ export function renderScanView() {
     State.cache.loteBoxes = [];
     State.view = 'mover-lote';
     render();
-  };
+  });
 
   if (!esOperario) {
     API.listCajas().then(cajas => {
