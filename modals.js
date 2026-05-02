@@ -518,29 +518,34 @@ export function renderCreateBoxModal() {
     const isProducto = nb.tipo_caja === 'producto';
     body = `
       ${stepHeader}
-      <div class="section-title" style="padding:0 0 8px;">Tipo de caja</div>
+      <p style="font-size:13px; color:var(--muted); margin-bottom:14px; text-align:center;">
+        Vas a crear una caja nueva en 4 pasos:<br>
+        <span style="font-size:11px;">1) Elegís tipo · 2) Imprimís QR · 3) Cargás productos · 4) Ubicación</span>
+      </p>
+
+      <div class="section-title" style="padding:0 0 8px;">¿Qué tipo de caja es?</div>
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:18px;">
         <button class="btn ${isProducto ? 'btn-primary' : ''}" data-tipo="producto" style="flex-direction:column; padding:14px; min-height:auto; gap:4px; text-align:center;">
           ${ICON.box}
           <div style="font-size:13px; font-weight:600;">Caja del producto</div>
-          <div style="font-size:10px; opacity:0.7; font-weight:400;">capacidad estándar</div>
+          <div style="font-size:10px; opacity:0.7; font-weight:400;">la que trae el proveedor</div>
         </button>
         <button class="btn ${!isProducto ? 'btn-primary' : ''}" data-tipo="reutilizable" style="flex-direction:column; padding:14px; min-height:auto; gap:4px; text-align:center;">
           ${ICON.box}
           <div style="font-size:13px; font-weight:600;">Caja reutilizable</div>
-          <div style="font-size:10px; opacity:0.7; font-weight:400;">caja de bodega</div>
+          <div style="font-size:10px; opacity:0.7; font-weight:400;">caja propia de bodega</div>
         </button>
       </div>
 
-      <div class="section-title" style="padding:0 0 8px;">Código QR generado</div>
+      <div class="section-title" style="padding:0 0 8px;">Código único de esta caja</div>
       <div class="box-header" style="margin-bottom:12px;">
-        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-          <div class="box-code mono" id="new-codigo">${escapeHtml(nb.codigo)}</div>
-          <button class="btn btn-sm btn-ghost" id="btn-regen" title="Generar otro">${ICON.refresh}</button>
-        </div>
+        <div class="box-code mono" id="new-codigo">${escapeHtml(nb.codigo)}</div>
         <div style="font-size:11px; color:var(--muted); margin-top:6px;">
-          Se imprimirá como QR para pegar en la caja física.
+          La app lo generó solo. En el siguiente paso vas a poder imprimirlo como QR.
         </div>
+        <button class="btn btn-sm btn-block" id="btn-regen" style="margin-top:10px;">
+          ${ICON.refresh} Generar otro código
+        </button>
       </div>
     `;
     footer = `
