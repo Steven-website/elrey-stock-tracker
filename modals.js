@@ -995,17 +995,18 @@ async function handleProductInBoxScanned(code) {
 // =====================================================================
 export function renderBatchGenerateModal() {
   if (!State.cache.batchGen) {
-    State.cache.batchGen = { step: 1, articulo: null, numCajas: 1, cantPorCaja: 1, posicionId: null };
+    State.cache.batchGen = { step: 1, articulo: null, numCajas: 1, cantPorCaja: 1, posicionId: null, generated: [] };
   }
   const bg = State.cache.batchGen;
   if (!bg.step) bg.step = 1;
-  const TOTAL = 4;
+  if (!bg.generated) bg.generated = [];
+  const TOTAL = 5;
 
   const stepHeader = `
     <div class="wizard-steps">
-      ${[1,2,3,4].map(n => `
+      ${[1,2,3,4,5].map(n => `
         <div class="wizard-step-dot ${bg.step >= n ? 'done' : ''} ${bg.step === n ? 'active' : ''}">${n}</div>
-        ${n < 4 ? `<div class="wizard-step-line ${bg.step > n ? 'done' : ''}"></div>` : ''}
+        ${n < 5 ? `<div class="wizard-step-line ${bg.step > n ? 'done' : ''}"></div>` : ''}
       `).join('')}
     </div>
     <div class="wizard-step-label">
@@ -1013,7 +1014,8 @@ export function renderBatchGenerateModal() {
         bg.step === 1 ? 'Producto' :
         bg.step === 2 ? '¿Cuántas cajas?' :
         bg.step === 3 ? 'Ubicación destino' :
-        'Confirmar e imprimir'
+        bg.step === 4 ? 'Generar e imprimir' :
+        'Verificar etiquetas'
       }
     </div>
   `;
@@ -1092,6 +1094,41 @@ export function renderBatchGenerateModal() {
     footer = `
       <button class="btn grow" id="bg-back">← Atrás</button>
       <button class="btn btn-primary grow" id="bg-next" ${!bg.posicionId ? 'disabled' : ''}>Siguiente →</button>
+    `;
+  }
+
+  // ── PASO 5: verificar etiquetas ──────────────────────────────────
+  if (bg.step === 5) {
+    const okCount = bg.generated.filter(g => g.confirmed).length;
+    const total   = bg.generated.length;
+    body = `
+      ${stepHeader}
+      <p style="font-size:13px; color:var(--muted); margin-bottom:12px; text-align:center;">
+        Escaneá cada etiqueta impresa para confirmar que salió bien.<br>
+        Si alguna falló, podés reimprimirla.
+      </p>
+      <div style="text-align:center; font-size:14px; font-weight:700; margin-bottom:10px;">
+        ${okCount} / ${total} confirmadas
+      </div>
+      <button class="btn btn-block btn-primary" id="bg-verify-scan" style="margin-bottom:12px;">
+        ${ICON.scan} Escanear etiqueta
+      </button>
+      <div id="bg-verify-list" style="display:flex; flex-direction:column; gap:6px;">
+        ${bg.generated.map((g, i) => `
+          <div class="bg-verify-row ${g.confirmed ? 'ok' : ''}" data-code="${escapeHtml(g.code)}">
+            <div class="bg-verify-status">${g.confirmed ? '✓' : (i+1)}</div>
+            <div class="bg-verify-code mono">${escapeHtml(g.code)}</div>
+            ${g.confirmed
+              ? '<span style="font-size:11px;color:var(--success,#4ade80);font-weight:700;">OK</span>'
+              : `<button class="btn btn-sm" data-reprint="${escapeHtml(g.code)}">${ICON.qr} Reimprimir</button>`}
+          </div>
+        `).join('')}
+      </div>
+    `;
+    footer = `
+      <button class="btn btn-block ${okCount === total ? 'btn-primary' : ''}" id="bg-finish">
+        ${okCount === total ? '✓ Todo confirmado · Finalizar' : `Finalizar (${total - okCount} sin confirmar)`}
+      </button>
     `;
   }
 
@@ -1255,13 +1292,83 @@ export function renderBatchGenerateModal() {
       }
 
       if (zebraOk === codes.length) {
-        toast(`✓ ${codes.length} cajas creadas e impresas`, 'success');
+        toast(`✓ ${codes.length} cajas creadas · ahora verificá`, 'success');
       } else if (zebraOk > 0) {
-        toast(`${codes.length} cajas creadas · ${zebraOk} impresas`, 'warn');
+        toast(`${codes.length} cajas creadas · ${zebraOk} enviadas a Zebra`, 'warn');
       } else {
-        toast(`${codes.length} cajas creadas. Zebra no respondió.`, 'warn');
+        toast(`${codes.length} cajas creadas · Zebra no respondió`, 'warn');
       }
 
+      // Pasar al paso 5 con la lista de códigos para verificar uno por uno
+      bg.generated = codes.map(c => ({ code: c, confirmed: false }));
+      bg.step = 5;
+      render();
+    };
+  }
+
+  // ── Paso 5: verificación ──
+  if (bg.step === 5) {
+    const reprintZPL = async (code) => {
+      const endpoint = State.config.zebraUrl || 'http://localhost:9100';
+      const zpl = [
+        '^XA','^PW400','^LL240','^LH0,0',
+        '^FO80,20^BQN,2,5^FDLA,' + code + '^FS',
+        '^FO20,200^A0N,22,22^FB360,1,0,C,0^FD' + code + '^FS',
+        '^XZ'
+      ].join('\n');
+      try {
+        const r = await fetch(endpoint + '/available');
+        const json = await r.json();
+        const dev = json?.printer?.[0] || json?.devices?.[0] || json?.printers?.[0];
+        if (!dev) throw new Error('Sin Zebra');
+        await fetch(endpoint + '/write', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device: dev, data: zpl })
+        });
+        toast(`Reimpresa: ${code.slice(-8)}`, 'success');
+      } catch (_) {
+        toast('Zebra no respondió', 'error');
+      }
+    };
+
+    modal.querySelectorAll('[data-reprint]').forEach(b => {
+      b.onclick = () => reprintZPL(b.dataset.reprint);
+    });
+
+    modal.querySelector('#bg-verify-scan').onclick = async () => {
+      try {
+        const { startScanner: ss, stopScanner: stp } = await import('./scanner.js');
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:#0f172a;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;';
+        overlay.innerHTML = `
+          <div style="color:#fff;font-size:14px;margin-bottom:10px;">Apuntá al QR de la etiqueta</div>
+          <div id="bg-verify-reader" style="width:100%;max-width:360px;height:360px;background:#000;border-radius:14px;overflow:hidden;position:relative;"></div>
+          <button class="btn" id="bg-verify-cancel" style="margin-top:14px;background:#fff;color:#000;">Cancelar</button>
+        `;
+        document.body.appendChild(overlay);
+        const cleanup = () => { stp(); overlay.remove(); };
+        overlay.querySelector('#bg-verify-cancel').onclick = cleanup;
+        ss('bg-verify-reader', (decoded) => {
+          cleanup();
+          const match = bg.generated.find(g => g.code === decoded.trim());
+          if (!match) { toast(`⚠ ${decoded.slice(0,12)}… no es del lote`, 'error'); return; }
+          if (match.confirmed) { toast('Ya estaba confirmada', 'info'); return; }
+          match.confirmed = true;
+          toast(`✓ ${decoded.slice(-8)} confirmada`, 'success');
+          State.modal = 'batchGenerate'; render();
+        });
+      } catch (e) {
+        toast('Error: ' + e.message, 'error');
+      }
+    };
+
+    modal.querySelector('#bg-finish').onclick = () => {
+      const okCount = bg.generated.filter(g => g.confirmed).length;
+      const total   = bg.generated.length;
+      if (okCount < total) {
+        if (!confirm(`Quedan ${total - okCount} sin confirmar. ¿Finalizar igual?\nLas cajas ya están guardadas en el sistema.`)) return;
+      }
       State.cache.batchGen = null;
       closeModal();
     };

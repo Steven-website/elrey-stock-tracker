@@ -775,6 +775,43 @@ main {
 }
 .action-card-purple .action-card-arrow { color: #a855f7; }
 
+/* Batch verify rows */
+.bg-verify-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.bg-verify-row.ok {
+  border-color: #4ade80;
+  background: rgba(74, 222, 128, 0.08);
+}
+.bg-verify-status {
+  width: 28px; height: 28px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700;
+  flex-shrink: 0;
+}
+.bg-verify-row.ok .bg-verify-status {
+  background: #4ade80;
+  color: #000;
+}
+.bg-verify-code {
+  font-size: 11px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
 .scan-frame {
   width: 200px; height: 200px;
   position: relative;
