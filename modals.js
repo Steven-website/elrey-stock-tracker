@@ -837,15 +837,10 @@ export function renderMoverLoteModal() {
       `).join('')}
     </div>
     <label class="label">Nueva ubicación</label>
-    <select class="select" id="lote-new-pos">
-      <option value="">— Seleccioná —</option>
-    </select>
-    <label class="label" style="margin-top:16px;">Nota rápida (opcional)</label>
-    <div class="note-chips">
-      ${['Reorganización', 'Temporada', 'Solicitud encargado', 'Más espacio', 'Corrección'].map(n =>
-        `<button class="note-chip" data-note="${n}">${n}</button>`
-      ).join('')}
+    <div id="lote-pos-list" class="lote-pos-grid">
+      <div class="empty" style="padding:24px 0;"><div class="loader"></div></div>
     </div>
+    <input type="hidden" id="lote-new-pos" value="" />
   `;
   const footerHtml = `
     <button class="btn grow" id="lote-cancel">Cancelar</button>
@@ -854,21 +849,29 @@ export function renderMoverLoteModal() {
   const modal = modalShell(`Mover ${lote.length} caja${lote.length !== 1 ? 's' : ''}`, bodyHtml, footerHtml);
 
   API.listPosiciones().then(positions => {
-    const sel = modal.querySelector('#lote-new-pos');
-    positions.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p.id;
-      opt.textContent = `${p.ubicacion} · ${p.descripcion}`;
-      sel.appendChild(opt);
+    const list = modal.querySelector('#lote-pos-list');
+    const hidden = modal.querySelector('#lote-new-pos');
+    if (!list) return;
+    if (!positions.length) {
+      list.innerHTML = `<div class="empty" style="padding:14px 0;"><p>Sin ubicaciones disponibles</p></div>`;
+      return;
+    }
+    list.innerHTML = positions.map(p => `
+      <button class="lote-pos-card" data-pid="${p.id}">
+        <div class="lote-pos-icon">${ICON.pin}</div>
+        <div class="lote-pos-text">
+          <div class="lote-pos-name">${escapeHtml(p.ubicacion || '—')}</div>
+          <div class="lote-pos-desc mono">${escapeHtml(p.descripcion || '')}</div>
+        </div>
+      </button>
+    `).join('');
+    list.querySelectorAll('.lote-pos-card').forEach(btn => {
+      btn.onclick = () => {
+        list.querySelectorAll('.lote-pos-card').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        hidden.value = btn.dataset.pid;
+      };
     });
-  });
-
-  modal.querySelectorAll('.note-chip').forEach(btn => {
-    btn.onclick = () => {
-      const active = btn.classList.contains('active');
-      modal.querySelectorAll('.note-chip').forEach(b => b.classList.remove('active'));
-      if (!active) btn.classList.add('active');
-    };
   });
 
   modal.querySelector('#lote-cancel').onclick = () => { State.modal = null; render(); };
@@ -876,7 +879,7 @@ export function renderMoverLoteModal() {
   modal.querySelector('#lote-confirm').onclick = async () => {
     const newPosId = parseInt(modal.querySelector('#lote-new-pos').value);
     if (!newPosId) { toast('Seleccioná una ubicación', 'error'); return; }
-    const notas = modal.querySelector('.note-chip.active')?.dataset.note || '';
+    const notas = '';
     const btn = modal.querySelector('#lote-confirm');
     btn.disabled = true;
     btn.innerHTML = '<span class="loader"></span>';
