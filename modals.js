@@ -1061,18 +1061,41 @@ export function renderPrintQRModal() {
       </div>
     </div>
     <div style="background:var(--surface-2); padding:14px; margin-top:12px; font-size:12px; line-height:1.6; color:var(--text-2);">
-      <strong style="color:var(--accent);">3 formas de imprimir:</strong><br>
-      <strong>A) Imprimir directo</strong> — tocá el botón "Imprimir" y elegí cualquier impresora (AirPrint, Bluetooth, USB, oficina).<br>
-      <strong>B) Etiquetadora chica</strong> (Phomemo M220, Brother, Niimbot, etc.) — tomá screenshot, abrí la app de tu impresora, importá la imagen o pegá el texto: <span class="mono" style="color:var(--accent); user-select:text;">${escapeHtml(code)}</span> y mandá a etiqueta 50×30 mm.<br>
-      <strong>C) PC compartida</strong> — copiá el código y pegalo en una hoja con QR online (qr-code-generator.com, etc).
+      <strong style="color:var(--accent);">Cómo imprimir:</strong><br>
+      <strong>A) Imprimir directo</strong> — botón "Imprimir": elegí cualquier impresora (AirPrint, Bluetooth, USB, oficina).<br>
+      <strong>B) Zebra (almacén)</strong> — botón "Zebra": envía ZPL directo a la impresora si tenés <em>Zebra Browser Print</em> instalado en la PC, o al endpoint de red. También podés copiar el ZPL.<br>
+      <strong>C) Etiquetadora chica</strong> (Phomemo, Brother, Niimbot) — tomá screenshot, abrila en la app de tu impresora.
     </div>
   `;
   const footerHtml = `
-    <button class="btn grow" id="copy-code">Copiar código</button>
-    <button class="btn grow" id="print-now">${ICON.qr || '🖨'} Imprimir</button>
-    <button class="btn btn-primary grow" id="done-print">Listo</button>
+    <div style="display:flex; flex-direction:column; gap:6px; width:100%;">
+      <div style="display:flex; gap:6px;">
+        <button class="btn grow" id="copy-code">Copiar código</button>
+        <button class="btn grow" id="print-zebra">${ICON.qr || '🖨'} Zebra (ZPL)</button>
+      </div>
+      <div style="display:flex; gap:6px;">
+        <button class="btn grow" id="print-now">${ICON.qr || '🖨'} Imprimir</button>
+        <button class="btn btn-primary grow" id="done-print">Listo</button>
+      </div>
+    </div>
   `;
   const modal = modalShell('QR de la caja', bodyHtml, footerHtml);
+
+  // ── ZPL para Zebra (etiqueta 50×30 mm a 203 dpi = ~400×240 dots) ──
+  const buildZPL = (txt) => {
+    const safe = String(txt).replace(/[^\x20-\x7E]/g, '');
+    return [
+      '^XA',
+      '^PW400',          // ancho ~50mm @ 203dpi
+      '^LL240',          // largo ~30mm
+      '^LH0,0',
+      // QR centrado
+      '^FO80,20^BQN,2,5^FDLA,' + safe + '^FS',
+      // Texto debajo del QR
+      '^FO20,200^A0N,22,22^FB360,1,0,C,0^FD' + safe + '^FS',
+      '^XZ'
+    ].join('\n');
+  };
 
   modal.querySelector('#copy-code').onclick = () => {
     navigator.clipboard?.writeText(code).then(
@@ -1080,6 +1103,42 @@ export function renderPrintQRModal() {
       () => toast('No se pudo copiar', 'error')
     );
   };
+
+  modal.querySelector('#print-zebra').onclick = async () => {
+    const zpl = buildZPL(code);
+
+    // 1) Intentar con Zebra Browser Print local (http://localhost:9100)
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 1500);
+      const r = await fetch('http://localhost:9100/available', { signal: ctrl.signal });
+      clearTimeout(t);
+      if (r.ok) {
+        const json = await r.json();
+        const dev = json?.printer?.[0] || json?.devices?.[0];
+        if (dev) {
+          await fetch('http://localhost:9100/write', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device: dev, data: zpl })
+          });
+          toast('Enviado a Zebra ✓', 'success');
+          return;
+        }
+      }
+    } catch (_) { /* sin Browser Print local */ }
+
+    // 2) Fallback: copiar ZPL al clipboard para pegarlo donde sea
+    try {
+      await navigator.clipboard.writeText(zpl);
+      toast('ZPL copiado — pegalo en el utilitario de tu Zebra', 'info');
+    } catch {
+      // 3) Último fallback: mostrar el ZPL en una ventana
+      const w = window.open('', '_blank');
+      if (w) { w.document.write('<pre>' + escapeHtml(zpl) + '</pre>'); w.document.close(); }
+    }
+  };
+
   modal.querySelector('#print-now').onclick = () => {
     // Abre una ventana imprimible con sólo el QR + código (cualquier impresora)
     const w = window.open('', '_blank');
