@@ -338,6 +338,27 @@ export const API = {
     return caja;
   },
 
+  async destruirCaja(cajaId, motivo = 'Caja destruida') {
+    const ahora = new Date().toISOString();
+    if (isDemoMode()) {
+      // Registrar movimiento antes de borrar
+      MOCK.movimientos.unshift({
+        id: nextId(MOCK.movimientos), tipo: 'consumir_caja',
+        caja_id: cajaId, articulo_id: null, cantidad: null,
+        usuario_id: State.user.id, motivo, creado_at: ahora
+      });
+      MOCK.cajas = MOCK.cajas.filter(c => c.id !== cajaId);
+      return true;
+    }
+    await sb.from('movimientos').insert({
+      tipo: 'consumir_caja', caja_id: cajaId,
+      usuario_id: State.user.id, motivo
+    });
+    const { error } = await sb.from('cajas').delete().eq('id', cajaId);
+    if (error) throw error;
+    return true;
+  },
+
   async consumirCaja(cajaId, motivo) {
     const ahora = new Date().toISOString();
     if (isDemoMode()) {

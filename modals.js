@@ -163,9 +163,14 @@ export function renderBoxModal() {
 
   const footerHtml = isConsumed
     ? `<button class="btn btn-block" id="btn-history">${ICON.history} Ver historial</button>`
-    : `<button class="btn grow" id="btn-print-box">${ICON.qr} Imprimir</button>
-       <button class="btn grow" id="btn-move">${ICON.move} Mover</button>
-       <button class="btn grow" id="btn-history">${ICON.history} Historial</button>`;
+    : `<div style="display:flex; flex-direction:column; gap:8px; width:100%;">
+         <div style="display:flex; gap:8px;">
+           <button class="btn grow" id="btn-print-box">${ICON.qr} Imprimir</button>
+           <button class="btn grow" id="btn-move">${ICON.move} Mover</button>
+           <button class="btn grow" id="btn-history">${ICON.history} Historial</button>
+         </div>
+         <button class="btn btn-danger btn-block" id="btn-destroy">${ICON.trash || '✕'} Destruir caja</button>
+       </div>`;
 
   const modal = modalShell('Detalle de caja', bodyHtml, footerHtml);
 
@@ -182,6 +187,30 @@ export function renderBoxModal() {
     State.cache.printCode = c.codigo_caja;
     State.modal = 'print';
     render();
+  });
+
+  modal.querySelector('#btn-destroy')?.addEventListener('click', async () => {
+    // Doble validación
+    const total = c.unidades_totales || 0;
+    if (!confirm(
+      `⚠️ ¿Destruir la caja ${c.codigo_caja}?\n\n` +
+      `Tiene ${total} unidad${total !== 1 ? 'es' : ''} en su contenido.\n` +
+      `Esta acción borra la caja del sistema.`
+    )) return;
+    const conf = prompt(
+      `Para confirmar, escribí exactamente:\n\nDESTRUIR`
+    );
+    if (conf?.trim().toUpperCase() !== 'DESTRUIR') {
+      toast('Confirmación incorrecta — caja NO destruida', 'warn');
+      return;
+    }
+    try {
+      await API.destruirCaja(c.id, `Destruida por ${State.user.username}`);
+      toast('Caja destruida', 'success');
+      closeModal();
+    } catch (e) {
+      toast('Error: ' + e.message, 'error');
+    }
   });
 
   modal.querySelector('#btn-scan-prod-in-box')?.addEventListener('click', () => {
