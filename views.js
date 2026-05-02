@@ -287,9 +287,14 @@ export function renderScanView() {
       <button class="btn" id="btn-manual">${ICON.check}</button>
     </div>
 
-    <div class="section" style="padding-top:0; padding-bottom:0; display:flex; flex-direction:column; gap:8px;">
-      <button class="btn btn-block" id="btn-create-from-scan">
-        ${ICON.add} Crear caja nueva
+    <div class="section" style="padding-top:0; padding-bottom:0; display:flex; flex-direction:column; gap:10px;">
+      <button class="action-card" id="btn-create-from-scan">
+        <div class="action-card-icon action-card-icon-success">${ICON.add}</div>
+        <div class="action-card-text">
+          <div class="action-card-title">Crear caja nueva</div>
+          <div class="action-card-sub">Generá un QR e iniciá el flujo paso a paso</div>
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="action-card-arrow"><path d="M9 18l6-6-6-6"/></svg>
       </button>
       <button class="action-card" id="btn-add-to-existing">
         <div class="action-card-icon">${ICON.scan}</div>
@@ -299,8 +304,13 @@ export function renderScanView() {
         </div>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="action-card-arrow"><path d="M9 18l6-6-6-6"/></svg>
       </button>
-      <button class="btn btn-block" id="btn-mover-lote-enter" style="border-color:var(--accent); color:var(--accent);">
-        ${ICON.move} Mover cajas en lote
+      <button class="action-card action-card-info" id="btn-mover-lote-enter">
+        <div class="action-card-icon action-card-icon-info">${ICON.move}</div>
+        <div class="action-card-text">
+          <div class="action-card-title">Mover cajas en lote</div>
+          <div class="action-card-sub">Escaneá varias cajas y trasladalas a otra ubicación</div>
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="action-card-arrow"><path d="M9 18l6-6-6-6"/></svg>
       </button>
     </div>
 
