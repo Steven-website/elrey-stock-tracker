@@ -24,6 +24,7 @@ import {
   renderScanProductInBoxModal,
   renderBatchGenerateModal,
   renderScanProductForBatchModal,
+  renderCambiarPasswordModal,
   renderArticulosModal, renderCreateArticuloModal, renderEditArticuloModal,
   renderTiendasModal, renderAuditModal,
   renderMoverLoteModal,
@@ -33,9 +34,24 @@ import {
 // =====================================================================
 // RENDER (función central)
 // =====================================================================
+// Devuelve true si el usuario tiene mas de 6 meses con la misma contraseña.
+// Excluye al rol admin (master).
+function _passwordExpired(user) {
+  if (!user || user.rol === 'admin') return false;
+  if (!user.password_set_at) return true; // sin fecha registrada -> forzar
+  const SIX_MONTHS = 6 * 30 * 24 * 60 * 60 * 1000;
+  return (Date.now() - new Date(user.password_set_at).getTime()) >= SIX_MONTHS;
+}
+
 export function render() {
   const root = document.getElementById('app');
   root.innerHTML = '';
+
+  // Forzar cambio de contraseña si vencio (todos menos admin)
+  if (State.user && _passwordExpired(State.user)) {
+    State.cache.passwordExpired = true;
+    State.modal = 'cambiar-password';
+  }
 
   if (!State.user) {
     root.appendChild(renderLogin());
@@ -57,6 +73,7 @@ export function render() {
       scanProductInBox: renderScanProductInBoxModal,
       batchGenerate:   renderBatchGenerateModal,
       scanProductForBatch: renderScanProductForBatchModal,
+      'cambiar-password': renderCambiarPasswordModal,
       createUser:      renderCreateUserModal,
       editUser:        renderEditUserModal,
       scanForSearch:   renderScanForSearchModal,
