@@ -1581,10 +1581,48 @@ export function renderAgregarSueltoModal() {
 
   const st = State.cache.agSuelto || (State.cache.agSuelto = { articulo: null, cantidad: 1 });
 
+  // Pantalla intermedia: ya guardo uno, preguntar si agrega otro o finaliza
+  if (st.askMore && st.added?.length) {
+    const bodyHtml2 = `
+      <div style="text-align:center; padding:10px 0 14px;">
+        <div style="font-size:32px; color:#22c55e;">✓</div>
+        <div style="font-weight:700; font-size:15px; margin-top:4px;">${st.added.length} producto${st.added.length !== 1 ? 's' : ''} agregado${st.added.length !== 1 ? 's' : ''}</div>
+      </div>
+      <div style="background:var(--surface-2); border-radius:10px; padding:10px 12px; font-size:12px; line-height:1.7; max-height:180px; overflow:auto;">
+        ${st.added.map(a => `
+          <div style="display:flex; justify-content:space-between; gap:8px;">
+            <span><strong style="color:var(--text);">${escapeHtml(a.sku || '')}</strong> ${escapeHtml(a.descripcion || '')}</span>
+            <span class="mono" style="color:var(--accent); font-weight:700;">${a.cantidad}</span>
+          </div>
+        `).join('')}
+      </div>
+      <p style="text-align:center; font-size:13px; color:var(--muted); margin-top:14px;">
+        ¿Querés agregar otro código o finalizar?
+      </p>
+    `;
+    const footerHtml2 = `
+      <button class="btn grow" id="ag-finish">Finalizar</button>
+      <button class="btn btn-primary grow" id="ag-more">${ICON.add} Agregar otro</button>
+    `;
+    const m = modalShell('Agregar producto suelto', bodyHtml2, footerHtml2);
+    m.querySelector('#ag-more').onclick = () => { st.askMore = false; render(); };
+    m.querySelector('#ag-finish').onclick = () => {
+      State.cache.agSuelto = null;
+      State.modal = 'inventarioUbicacion';
+      render();
+    };
+    return m;
+  }
+
   const bodyHtml = `
     <p style="font-size:13px; color:var(--muted); margin-bottom:12px;">
       Escaneá o escribí el código del producto. Después indicá la cantidad.
     </p>
+    ${st.added?.length ? `
+      <div style="font-size:11px; color:var(--muted); margin-bottom:10px;">
+        Ya agregaste: <strong style="color:var(--accent);">${st.added.length}</strong> producto${st.added.length !== 1 ? 's' : ''}
+      </div>
+    ` : ''}
 
     <label class="label">Producto</label>
     ${st.articulo ? `
@@ -1616,7 +1654,7 @@ export function renderAgregarSueltoModal() {
   `;
 
   const footerHtml = `
-    <button class="btn grow" id="ag-cancel">Cancelar</button>
+    <button class="btn grow" id="ag-cancel">${st.added?.length ? 'Finalizar' : 'Cancelar'}</button>
     ${st.articulo ? `<button class="btn btn-primary grow" id="ag-save">${ICON.check} Guardar</button>` : ''}
   `;
   const modal = modalShell('Agregar producto suelto', bodyHtml, footerHtml);
@@ -1685,8 +1723,13 @@ export function renderAgregarSueltoModal() {
     try {
       await API.agregarProductoSuelto(posId, st.articulo.id, st.cantidad);
       toast(`✓ ${st.cantidad} × ${st.articulo.descripcion}`, 'success');
-      State.cache.agSuelto = null;
-      State.modal = 'inventarioUbicacion';
+      // Acumular para mostrar el resumen
+      st.added = st.added || [];
+      st.added.push({ sku: st.articulo.sku, descripcion: st.articulo.descripcion, cantidad: st.cantidad });
+      // Limpiar el producto/cantidad y dejar el modal en modo elegir siguiente
+      st.articulo = null;
+      st.cantidad = 1;
+      st.askMore = true;
       render();
     } catch (e) { toast('Error: ' + e.message, 'error'); }
   });
