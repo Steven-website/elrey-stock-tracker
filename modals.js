@@ -991,181 +991,281 @@ async function handleProductInBoxScanned(code) {
 
 
 // =====================================================================
-// GENERAR CAJAS EN LOTE — escanea producto + cantidad de cajas + imprime Zebra
+// IMPRIMIR LOTE DE ETIQUETAS — wizard de 4 pasos
 // =====================================================================
 export function renderBatchGenerateModal() {
   if (!State.cache.batchGen) {
-    State.cache.batchGen = { articulo: null, numCajas: 1, cantPorCaja: 1, posicionId: null, positions: [] };
+    State.cache.batchGen = { step: 1, articulo: null, numCajas: 1, cantPorCaja: 1, posicionId: null };
   }
   const bg = State.cache.batchGen;
+  if (!bg.step) bg.step = 1;
+  const TOTAL = 4;
 
-  const bodyHtml = `
-    <p style="font-size:13px; color:var(--muted); margin-bottom:12px;">
-      Escaneá un producto y decí cuántas cajas iguales querés generar. La app va a crear las cajas y enviar todas las etiquetas a la Zebra.
-    </p>
+  const stepHeader = `
+    <div class="wizard-steps">
+      ${[1,2,3,4].map(n => `
+        <div class="wizard-step-dot ${bg.step >= n ? 'done' : ''} ${bg.step === n ? 'active' : ''}">${n}</div>
+        ${n < 4 ? `<div class="wizard-step-line ${bg.step > n ? 'done' : ''}"></div>` : ''}
+      `).join('')}
+    </div>
+    <div class="wizard-step-label">
+      Paso ${bg.step} de ${TOTAL} · ${
+        bg.step === 1 ? 'Producto' :
+        bg.step === 2 ? '¿Cuántas cajas?' :
+        bg.step === 3 ? 'Ubicación destino' :
+        'Confirmar e imprimir'
+      }
+    </div>
+  `;
 
-    <div class="section-title" style="padding:0 0 8px;">1 · Producto</div>
-    <div id="bg-prod-box" style="margin-bottom:14px;">
+  let body, footer;
+
+  // ── PASO 1: producto ─────────────────────────────────────────────
+  if (bg.step === 1) {
+    body = `
+      ${stepHeader}
+      <p style="font-size:13px; color:var(--muted); margin-bottom:14px; text-align:center;">
+        Escaneá o seleccioná el producto que va a ir en cada caja.
+      </p>
       ${bg.articulo ? `
         <div class="qty-row">
           <div class="qty-row-top">
             <div class="grow">
               <div class="qty-row-name">${escapeHtml(bg.articulo.descripcion)}</div>
               <div class="qty-row-sku mono">${escapeHtml(bg.articulo.sku || '—')} · ${escapeHtml(bg.articulo.codigo_barras || '')}</div>
+              ${bg.articulo.unidades_por_caja ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;">Capacidad estándar: ${bg.articulo.unidades_por_caja} u.</div>` : ''}
             </div>
             <button class="btn btn-sm" id="bg-rescan">Cambiar</button>
           </div>
         </div>
       ` : `
-        <button class="btn btn-block btn-primary" id="bg-scan-prod">${ICON.scan} Escanear producto</button>
-        <button class="btn btn-block btn-ghost" id="bg-pick-prod" style="margin-top:6px;">${ICON.list} Seleccionar manual</button>
+        <button class="btn btn-block btn-primary" id="bg-scan-prod" style="padding:14px;">
+          ${ICON.scan} Escanear producto
+        </button>
+        <button class="btn btn-block btn-ghost" id="bg-pick-prod" style="margin-top:8px;">
+          ${ICON.list} Seleccionar de la lista
+        </button>
       `}
-    </div>
+    `;
+    footer = `
+      <button class="btn grow" id="bg-cancel">Cancelar</button>
+      <button class="btn btn-primary grow" id="bg-next" ${!bg.articulo ? 'disabled' : ''}>Siguiente →</button>
+    `;
+  }
 
-    <div class="section-title" style="padding:0 0 8px;">2 · Cantidades</div>
-    <label class="label">¿Cuántas cajas?</label>
-    <input type="number" inputmode="numeric" pattern="[0-9]*" id="bg-num" class="input" min="1" max="200" value="${bg.numCajas}" style="font-size:24px; text-align:center; font-weight:700;" />
-    <label class="label" style="margin-top:12px;">Unidades por caja</label>
-    <input type="number" inputmode="numeric" pattern="[0-9]*" id="bg-cant" class="input" min="1" value="${bg.cantPorCaja}" style="font-size:18px; text-align:center; font-weight:600;" />
+  // ── PASO 2: cantidades ───────────────────────────────────────────
+  else if (bg.step === 2) {
+    body = `
+      ${stepHeader}
+      <p style="font-size:13px; color:var(--muted); margin-bottom:18px; text-align:center;">
+        Vas a generar <strong style="color:var(--text);">${escapeHtml(bg.articulo?.descripcion || '')}</strong>.
+      </p>
 
-    <div class="section-title" style="padding:14px 0 8px;">3 · Ubicación</div>
-    <div id="bg-pos-list" class="lote-pos-grid">
-      <div class="empty" style="padding:18px 0;"><div class="loader"></div></div>
-    </div>
-  `;
+      <label class="label">¿Cuántas cajas querés?</label>
+      <input type="number" inputmode="numeric" pattern="[0-9]*" id="bg-num" class="input" min="1" max="200" value="${bg.numCajas}" style="font-size:32px; text-align:center; font-weight:700; padding:14px;" />
 
-  const footerHtml = `
-    <button class="btn grow" id="bg-cancel">Cancelar</button>
-    <button class="btn btn-primary grow" id="bg-go">${ICON.qr} Generar e imprimir</button>
-  `;
-  const modal = modalShell('Generar cajas en lote', bodyHtml, footerHtml);
-
-  const numIn  = modal.querySelector('#bg-num');
-  const cantIn = modal.querySelector('#bg-cant');
-  numIn.oninput  = e => { bg.numCajas    = Math.max(1, parseInt(e.target.value) || 1); };
-  cantIn.oninput = e => { bg.cantPorCaja = Math.max(1, parseInt(e.target.value) || 1); };
-
-  modal.querySelector('#bg-scan-prod')?.addEventListener('click', () => {
-    State.cache.scanProductReturnTo = 'batchGenerate';
-    State.modal = 'scanProductForBatch';
-    render();
-  });
-  modal.querySelector('#bg-rescan')?.addEventListener('click', () => {
-    bg.articulo = null;
-    State.modal = 'batchGenerate';
-    render();
-  });
-  modal.querySelector('#bg-pick-prod')?.addEventListener('click', async () => {
-    const arts = await API.listArticulos();
-    const txt = prompt('SKU o código de barras:\n\n' +
-      arts.slice(0, 12).map(a => `${a.sku} · ${a.descripcion}`).join('\n'));
-    if (!txt) return;
-    const found = arts.find(a =>
-      a.sku === txt.trim() || a.codigo_barras === txt.trim() ||
-      a.descripcion.toLowerCase().includes(txt.trim().toLowerCase())
-    );
-    if (!found) { toast('No encontré ese producto', 'error'); return; }
-    bg.articulo = found;
-    if (found.unidades_por_caja) bg.cantPorCaja = found.unidades_por_caja;
-    State.modal = 'batchGenerate'; render();
-  });
-
-  // Cargar ubicaciones
-  API.listPosiciones().then(positions => {
-    const list = modal.querySelector('#bg-pos-list');
-    if (!positions.length) {
-      list.innerHTML = `<div class="empty"><p>Sin ubicaciones</p></div>`; return;
-    }
-    list.innerHTML = positions.map(p => `
-      <button class="lote-pos-card ${bg.posicionId === p.id ? 'selected' : ''}" data-pid="${p.id}">
-        <div class="lote-pos-icon">${ICON.pin}</div>
-        <div class="lote-pos-text">
-          <div class="lote-pos-name">${escapeHtml(p.ubicacion || '—')}</div>
-          <div class="lote-pos-desc mono">${escapeHtml(p.descripcion || '')}</div>
+      <label class="label" style="margin-top:14px;">Unidades por caja</label>
+      <input type="number" inputmode="numeric" pattern="[0-9]*" id="bg-cant" class="input" min="1" value="${bg.cantPorCaja}" style="font-size:24px; text-align:center; font-weight:700; padding:12px;" />
+      ${bg.articulo?.unidades_por_caja ? `
+        <div style="font-size:11px; color:var(--muted); margin-top:4px; text-align:center;">
+          Estándar del producto: ${bg.articulo.unidades_por_caja} u.
         </div>
-      </button>
-    `).join('');
-    list.querySelectorAll('.lote-pos-card').forEach(btn => {
-      btn.onclick = () => {
-        list.querySelectorAll('.lote-pos-card').forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
-        bg.posicionId = parseInt(btn.dataset.pid);
-      };
-    });
+      ` : ''}
+    `;
+    footer = `
+      <button class="btn grow" id="bg-back">← Atrás</button>
+      <button class="btn btn-primary grow" id="bg-next">Siguiente →</button>
+    `;
+  }
+
+  // ── PASO 3: ubicación ────────────────────────────────────────────
+  else if (bg.step === 3) {
+    body = `
+      ${stepHeader}
+      <p style="font-size:13px; color:var(--muted); margin-bottom:14px; text-align:center;">
+        ¿Dónde van a quedar guardadas las ${bg.numCajas} cajas?
+      </p>
+      <div id="bg-pos-list" class="lote-pos-grid">
+        <div class="empty" style="padding:18px 0;"><div class="loader"></div></div>
+      </div>
+    `;
+    footer = `
+      <button class="btn grow" id="bg-back">← Atrás</button>
+      <button class="btn btn-primary grow" id="bg-next" ${!bg.posicionId ? 'disabled' : ''}>Siguiente →</button>
+    `;
+  }
+
+  // ── PASO 4: resumen + generar ────────────────────────────────────
+  else if (bg.step === 4) {
+    const totalUnits = bg.numCajas * bg.cantPorCaja;
+    body = `
+      ${stepHeader}
+      <div class="section-title" style="padding:0 0 8px;">Resumen</div>
+      <div style="font-size:13px; background:var(--surface-2); padding:14px; border-radius:12px; line-height:1.7;">
+        <div><strong style="color:var(--text);">Producto:</strong> ${escapeHtml(bg.articulo.descripcion)}</div>
+        <div><strong style="color:var(--text);">SKU:</strong> <span class="mono">${escapeHtml(bg.articulo.sku || '—')}</span></div>
+        <div><strong style="color:var(--text);">Cajas a generar:</strong> ${bg.numCajas}</div>
+        <div><strong style="color:var(--text);">Unidades por caja:</strong> ${bg.cantPorCaja}</div>
+        <div><strong style="color:var(--text);">Total de unidades:</strong> ${totalUnits}</div>
+      </div>
+      <div class="banner banner-info" style="border:1px solid; padding:10px 12px; margin-top:14px; font-size:12px;">
+        ${ICON.info}
+        <span>Al confirmar, la app crea las cajas y manda todas las etiquetas a la Zebra. Si la Zebra no está conectada, las cajas igual quedan guardadas.</span>
+      </div>
+      <div id="bg-progress" style="font-size:12px; color:var(--muted); margin-top:10px; min-height:18px;"></div>
+    `;
+    footer = `
+      <button class="btn grow" id="bg-back">← Atrás</button>
+      <button class="btn btn-primary grow" id="bg-go">${ICON.qr} Generar e imprimir</button>
+    `;
+  }
+
+  const modal = modalShell('Imprimir lote de etiquetas', body, footer);
+
+  // ── Handlers comunes ──
+  modal.querySelector('#bg-cancel')?.addEventListener('click', () => {
+    if (confirm('¿Cancelar el lote?')) { State.cache.batchGen = null; closeModal(); }
+  });
+  modal.querySelector('#bg-back')?.addEventListener('click', () => {
+    bg.step = Math.max(1, bg.step - 1);
+    render();
   });
 
-  modal.querySelector('#bg-cancel').onclick = () => {
-    State.cache.batchGen = null;
-    closeModal();
-  };
+  // ── Paso 1 ──
+  if (bg.step === 1) {
+    modal.querySelector('#bg-scan-prod')?.addEventListener('click', () => {
+      State.modal = 'scanProductForBatch'; render();
+    });
+    modal.querySelector('#bg-rescan')?.addEventListener('click', () => {
+      bg.articulo = null; State.modal = 'batchGenerate'; render();
+    });
+    modal.querySelector('#bg-pick-prod')?.addEventListener('click', async () => {
+      const arts = await API.listArticulos();
+      const txt = prompt('SKU o código de barras:\n\n' +
+        arts.slice(0, 12).map(a => `${a.sku} · ${a.descripcion}`).join('\n'));
+      if (!txt) return;
+      const found = arts.find(a =>
+        a.sku === txt.trim() || a.codigo_barras === txt.trim() ||
+        a.descripcion.toLowerCase().includes(txt.trim().toLowerCase())
+      );
+      if (!found) { toast('No encontré ese producto', 'error'); return; }
+      bg.articulo = found;
+      if (found.unidades_por_caja) bg.cantPorCaja = found.unidades_por_caja;
+      State.modal = 'batchGenerate'; render();
+    });
+    modal.querySelector('#bg-next').onclick = () => {
+      if (!bg.articulo) return;
+      bg.step = 2; render();
+    };
+  }
 
-  modal.querySelector('#bg-go').onclick = async () => {
-    if (!bg.articulo) { toast('Escaneá o seleccioná un producto', 'error'); return; }
-    if (!bg.posicionId) { toast('Elegí una ubicación', 'error'); return; }
-    if (bg.numCajas < 1) { toast('Cantidad de cajas inválida', 'error'); return; }
-    if (!confirm(`¿Generar ${bg.numCajas} caja${bg.numCajas !== 1 ? 's' : ''} con ${bg.cantPorCaja} ${bg.articulo.descripcion}?\n\nSe imprimirán todas en la Zebra.`)) return;
+  // ── Paso 2 ──
+  if (bg.step === 2) {
+    modal.querySelector('#bg-num').oninput  = e => { bg.numCajas    = Math.max(1, parseInt(e.target.value) || 1); };
+    modal.querySelector('#bg-cant').oninput = e => { bg.cantPorCaja = Math.max(1, parseInt(e.target.value) || 1); };
+    modal.querySelector('#bg-next').onclick = () => {
+      if (bg.numCajas < 1 || bg.cantPorCaja < 1) { toast('Cantidades inválidas', 'error'); return; }
+      bg.step = 3; render();
+    };
+  }
 
-    const btn = modal.querySelector('#bg-go');
-    btn.disabled = true;
-
-    const codes = [];
-    for (let i = 0; i < bg.numCajas; i++) {
-      btn.textContent = `Creando caja ${i+1}/${bg.numCajas}…`;
-      const codigo = generateBoxCode();
-      try {
-        await API.createCaja({
-          codigo_caja: codigo,
-          tipo_caja: 'producto',
-          posicion_id: bg.posicionId,
-          items: [{ articulo_id: bg.articulo.id, cantidad: bg.cantPorCaja }],
-          motivo: 'Generación en lote'
-        });
-        codes.push(codigo);
-      } catch (e) {
-        toast(`Error en caja ${i+1}: ${e.message}`, 'error');
+  // ── Paso 3 ──
+  if (bg.step === 3) {
+    API.listPosiciones().then(positions => {
+      const list = modal.querySelector('#bg-pos-list');
+      const next = modal.querySelector('#bg-next');
+      if (!positions.length) {
+        list.innerHTML = `<div class="empty"><p>Sin ubicaciones</p></div>`; return;
       }
-    }
+      list.innerHTML = positions.map(p => `
+        <button class="lote-pos-card ${bg.posicionId === p.id ? 'selected' : ''}" data-pid="${p.id}">
+          <div class="lote-pos-icon">${ICON.pin}</div>
+          <div class="lote-pos-text">
+            <div class="lote-pos-name">${escapeHtml(p.ubicacion || '—')}</div>
+            <div class="lote-pos-desc mono">${escapeHtml(p.descripcion || '')}</div>
+          </div>
+        </button>
+      `).join('');
+      list.querySelectorAll('.lote-pos-card').forEach(btn => {
+        btn.onclick = () => {
+          list.querySelectorAll('.lote-pos-card').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          bg.posicionId = parseInt(btn.dataset.pid);
+          if (next) next.disabled = false;
+        };
+      });
+    });
+    modal.querySelector('#bg-next').onclick = () => {
+      if (!bg.posicionId) { toast('Elegí una ubicación', 'error'); return; }
+      bg.step = 4; render();
+    };
+  }
 
-    // Imprimir cada una en Zebra (best-effort)
-    btn.textContent = 'Enviando a Zebra…';
-    const endpoint = State.config.zebraUrl || 'http://localhost:9100';
-    let zebraOk = 0, zebraFail = 0;
-    let device = null;
-    try {
-      const r = await fetch(endpoint + '/available');
-      const json = await r.json();
-      device = json?.printer?.[0] || json?.devices?.[0] || json?.printers?.[0];
-    } catch (_) { device = null; }
+  // ── Paso 4 ──
+  if (bg.step === 4) {
+    modal.querySelector('#bg-go').onclick = async () => {
+      const btn = modal.querySelector('#bg-go');
+      const prog = modal.querySelector('#bg-progress');
+      btn.disabled = true;
 
-    for (const code of codes) {
-      const zpl = [
-        '^XA','^PW400','^LL240','^LH0,0',
-        '^FO80,20^BQN,2,5^FDLA,' + code + '^FS',
-        '^FO20,200^A0N,22,22^FB360,1,0,C,0^FD' + code + '^FS',
-        '^XZ'
-      ].join('\n');
-      if (!device) { zebraFail++; continue; }
+      const codes = [];
+      for (let i = 0; i < bg.numCajas; i++) {
+        prog.textContent = `Creando caja ${i+1} de ${bg.numCajas}…`;
+        const codigo = generateBoxCode();
+        try {
+          await API.createCaja({
+            codigo_caja: codigo,
+            tipo_caja: 'producto',
+            posicion_id: bg.posicionId,
+            items: [{ articulo_id: bg.articulo.id, cantidad: bg.cantPorCaja }],
+            motivo: 'Generación en lote'
+          });
+          codes.push(codigo);
+        } catch (e) {
+          toast(`Error en caja ${i+1}: ${e.message}`, 'error');
+        }
+      }
+
+      prog.textContent = 'Enviando a Zebra…';
+      const endpoint = State.config.zebraUrl || 'http://localhost:9100';
+      let zebraOk = 0, zebraFail = 0;
+      let device = null;
       try {
-        await fetch(endpoint + '/write', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ device, data: zpl })
-        });
-        zebraOk++;
-      } catch (_) { zebraFail++; }
-    }
+        const r = await fetch(endpoint + '/available');
+        const json = await r.json();
+        device = json?.printer?.[0] || json?.devices?.[0] || json?.printers?.[0];
+      } catch (_) { device = null; }
 
-    if (zebraOk === codes.length) {
-      toast(`✓ ${codes.length} cajas creadas e impresas`, 'success');
-    } else if (zebraOk > 0) {
-      toast(`${codes.length} cajas creadas · ${zebraOk} impresas, ${zebraFail} fallaron`, 'warn');
-    } else {
-      toast(`${codes.length} cajas creadas. Zebra no respondió — los códigos quedaron guardados.`, 'warn');
-    }
+      for (const code of codes) {
+        const zpl = [
+          '^XA','^PW400','^LL240','^LH0,0',
+          '^FO80,20^BQN,2,5^FDLA,' + code + '^FS',
+          '^FO20,200^A0N,22,22^FB360,1,0,C,0^FD' + code + '^FS',
+          '^XZ'
+        ].join('\n');
+        if (!device) { zebraFail++; continue; }
+        try {
+          await fetch(endpoint + '/write', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device, data: zpl })
+          });
+          zebraOk++;
+        } catch (_) { zebraFail++; }
+      }
 
-    State.cache.batchGen = null;
-    closeModal();
-  };
+      if (zebraOk === codes.length) {
+        toast(`✓ ${codes.length} cajas creadas e impresas`, 'success');
+      } else if (zebraOk > 0) {
+        toast(`${codes.length} cajas creadas · ${zebraOk} impresas`, 'warn');
+      } else {
+        toast(`${codes.length} cajas creadas. Zebra no respondió.`, 'warn');
+      }
+
+      State.cache.batchGen = null;
+      closeModal();
+    };
+  }
 
   return modal;
 }

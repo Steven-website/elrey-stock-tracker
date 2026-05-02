@@ -315,8 +315,8 @@ export function renderScanView() {
       <button class="action-card action-card-purple" id="btn-batch-generate">
         <div class="action-card-icon action-card-icon-purple">${ICON.qr}</div>
         <div class="action-card-text">
-          <div class="action-card-title">Generar cajas en lote (Zebra)</div>
-          <div class="action-card-sub">Escaneá un producto y decí cuántas cajas crear e imprimir</div>
+          <div class="action-card-title">Imprimir lote de etiquetas</div>
+          <div class="action-card-sub">Escaneá un producto y generá varias cajas iguales</div>
         </div>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="action-card-arrow"><path d="M9 18l6-6-6-6"/></svg>
       </button>
