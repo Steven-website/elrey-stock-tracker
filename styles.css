@@ -582,6 +582,89 @@ main {
   border-color: var(--accent);
 }
 
+/* Lote choice panel — Escanear otra / Finalizar */
+.lote-choice {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 18px;
+  gap: 6px;
+  text-align: center;
+  color: #f1f5f9;
+}
+.lote-choice-icon {
+  width: 56px; height: 56px;
+  border-radius: 999px;
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 6px;
+}
+.lote-choice-icon svg { width: 32px; height: 32px; }
+.lote-choice-title { font-size: 18px; font-weight: 700; }
+.lote-choice-sub { font-size: 13px; color: #94a3b8; margin-bottom: 14px; }
+.lote-choice-buttons {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 320px;
+}
+.lote-choice-btn {
+  width: 100%;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 12px;
+}
+.lote-choice-btn-finish {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Mover lote — grilla de ubicaciones */
+.lote-pos-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  margin-bottom: 6px;
+}
+.lote-pos-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+.lote-pos-card:active { background: var(--surface-2); }
+.lote-pos-card.selected {
+  border-color: var(--accent);
+  background: rgba(245, 159, 11, 0.08);
+  box-shadow: 0 0 0 2px rgba(245, 159, 11, 0.18);
+}
+.lote-pos-icon {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.lote-pos-icon svg { width: 18px; height: 18px; }
+.lote-pos-text { min-width: 0; flex: 1; }
+.lote-pos-name { font-size: 14px; font-weight: 600; color: var(--text); }
+.lote-pos-desc { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
 .scan-frame {
   width: 200px; height: 200px;
   position: relative;

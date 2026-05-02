@@ -1011,24 +1011,38 @@ function renderMoverLoteView() {
   wrap.querySelector('#btn-lote-ok').onclick = submit;
   inp.onkeydown = e => { if (e.key === 'Enter') submit(); };
 
+  const showLoteChoice = () => {
+    const hero = wrap.querySelector('.scan-hero-inner');
+    if (!hero) return;
+    const total = State.cache.loteBoxes.length;
+    hero.innerHTML = `
+      <div class="lote-choice">
+        <div class="lote-choice-icon">${ICON.check}</div>
+        <h3 class="lote-choice-title">${total} caja${total !== 1 ? 's' : ''} en lista</h3>
+        <p class="lote-choice-sub">¿Querés escanear otra caja o finalizar?</p>
+        <div class="lote-choice-buttons">
+          <button class="btn btn-primary lote-choice-btn" id="lote-again">
+            ${ICON.scan} Escanear otra
+          </button>
+          <button class="btn lote-choice-btn lote-choice-btn-finish" id="lote-finish">
+            ${ICON.check} Finalizar y elegir ubicación
+          </button>
+        </div>
+      </div>
+    `;
+    hero.querySelector('#lote-again').onclick = () => startLoteCam();
+    hero.querySelector('#lote-finish').onclick = () => {
+      if (State.cache.loteBoxes.length > 0) { State.modal = 'moverLote'; render(); }
+    };
+  };
+
   const startLoteCam = () => {
     const hero = wrap.querySelector('.scan-hero-inner');
     if (hero) hero.innerHTML = `<div id="lote-qr-reader"></div><div class="scan-overlay"><div class="scan-frame"><span></span><span></span><div class="scan-line"></div></div></div>`;
     startScanner('lote-qr-reader', async (code) => {
       await handleScan(code);
-      // Tras agregar la caja, mostrar prompt: escanear otra o finalizar
-      setTimeout(() => {
-        const seguir = confirm(
-          `${State.cache.loteBoxes.length} caja(s) en lista.\n\n` +
-          `Aceptar = ESCANEAR OTRA\nCancelar = FINALIZAR y elegir ubicación`
-        );
-        if (seguir) {
-          startLoteCam();
-        } else if (State.cache.loteBoxes.length > 0) {
-          State.modal = 'moverLote';
-          render();
-        }
-      }, 200);
+      // Tras agregar la caja, mostrar dos botones grandes (escanear otra / finalizar)
+      setTimeout(() => showLoteChoice(), 150);
     });
   };
   wrap.querySelector('#btn-lote-cam').onclick = startLoteCam;
