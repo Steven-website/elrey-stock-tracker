@@ -43,6 +43,10 @@ export const MOCK = {
     { id: 6, descripcion: 'P2-E1-N1', ubicacion: 'Corona H01',    tipo: 'corona',     tienda_id: 2, estante_id: 9 }
   ],
 
+  // Productos sueltos en una ubicación (sin caja). Una ubicación puede
+  // tener cajas Y productos sueltos al mismo tiempo.
+  posicion_contenido: [],
+
   bodegas: [
     { id: 1, tienda_id: 1, nombre: 'Bodega Central',  descripcion: 'Bodega principal de la tienda' },
     { id: 2, tienda_id: 1, nombre: 'Exhibición',      descripcion: 'Área de exhibición al cliente' },

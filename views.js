@@ -312,6 +312,16 @@ export function renderScanView() {
         </div>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="action-card-arrow"><path d="M9 18l6-6-6-6"/></svg>
       </button>
+      ${esOperario ? '' : `
+      <button class="action-card" id="btn-inv-ubicacion" style="background:linear-gradient(135deg,rgba(34,197,94,0.12) 0%,rgba(34,197,94,0.04) 100%);border-color:rgba(34,197,94,0.35);">
+        <div class="action-card-icon" style="background:#16a34a;color:#fff;">${ICON.pin}</div>
+        <div class="action-card-text">
+          <div class="action-card-title">Inventario en ubicación</div>
+          <div class="action-card-sub">Cajas + productos sueltos en una posición</div>
+        </div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="action-card-arrow" style="color:#16a34a;"><path d="M9 18l6-6-6-6"/></svg>
+      </button>
+      `}
       <button class="action-card action-card-purple" id="btn-batch-generate">
         <div class="action-card-icon action-card-icon-purple">${ICON.qr}</div>
         <div class="action-card-text">
@@ -357,6 +367,12 @@ export function renderScanView() {
     if (scannerActive()) stopScanner();
     State.cache.newBox = null;
     State.modal = 'create';
+    render();
+  });
+
+  wrap.querySelector('#btn-inv-ubicacion')?.addEventListener('click', () => {
+    if (scannerActive()) stopScanner();
+    State.modal = 'inventarioUbicacion';
     render();
   });
 
