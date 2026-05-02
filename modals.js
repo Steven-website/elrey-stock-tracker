@@ -1435,7 +1435,9 @@ export function renderScanProductForBatchModal() {
 // =====================================================================
 export function renderInventarioUbicacionModal() {
   const inv = State.cache.invUbic || (State.cache.invUbic = { posicionId: null });
-  const isAdmin = ['admin','admin_tienda','supervisor','jefe_inventario'].includes(State.user?.rol);
+  // Quien puede agregar/reducir productos sueltos: todos los roles operativos
+  const canEdit = ['admin','admin_tienda','supervisor','jefe_inventario','operario'].includes(State.user?.rol);
+  const isAdmin = canEdit; // alias para no tocar el codigo de abajo
 
   const headerHtml = `
     <div class="section-title" style="padding:0 0 8px;">Elegí la ubicación</div>
