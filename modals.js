@@ -583,8 +583,7 @@ export function renderCreateBoxModal() {
       </div>
     `;
     footer = `
-      <button class="btn grow" id="wiz-back">← Atrás</button>
-      <button class="btn grow" id="wiz-next">Saltar verificación →</button>
+      <button class="btn btn-block" id="wiz-back">← Atrás</button>
     `;
   }
 
@@ -695,6 +694,7 @@ export function renderCreateBoxModal() {
       State.modal = 'print';
       render();
     };
+    // wiz-next no existe en paso 2: la única forma de avanzar es escaneando el QR
     modal.querySelector('#wiz-verify-scan').onclick = async () => {
       try {
         const { startScanner: ss, stopScanner: stp } = await import('./scanner.js');
@@ -723,7 +723,6 @@ export function renderCreateBoxModal() {
         toast('Error al abrir cámara: ' + e.message, 'error');
       }
     };
-    modal.querySelector('#wiz-next').onclick = () => { nb.step = 3; render(); };
   }
 
   // ── Paso 3 ──
