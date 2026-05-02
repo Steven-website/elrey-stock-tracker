@@ -1014,7 +1014,7 @@ function renderMoverLoteView() {
   wrap.querySelector('#btn-lote-cam').onclick = () => {
     const hero = wrap.querySelector('.scan-hero-inner');
     if (hero) hero.innerHTML = `<div id="lote-qr-reader"></div><div class="scan-overlay"><div class="scan-frame"><span></span><span></span><div class="scan-line"></div></div></div>`;
-    startScanner('lote-qr-reader', handleScan);
+    startScanner('lote-qr-reader', handleScan, { continuous: true });
   };
 
   wrap.querySelector('#btn-lote-exit').onclick = () => {
